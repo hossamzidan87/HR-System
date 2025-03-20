@@ -5,7 +5,7 @@ include 'page_access.php';
 require 'vendor/autoload.php'; // Ensure PHPExcel is installed via Composer
 
 
-// Handle form submission to update department groupe
+// Handle form submission to update department groups
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST['rule_name'] === 'update_department_groups') {
     // Add new department
     if (isset($_POST['new_department']) && !empty($_POST['new_department'])) {
