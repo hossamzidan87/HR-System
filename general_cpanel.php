@@ -2,7 +2,7 @@
 include 'check_cookies.php';
 include 'db_connection.php';
 include 'page_access.php';
-require 'vendor/autoload.php'; // Ensure PHPExcel is installed via Compose
+require 'vendor/autoload.php'; // Ensure PHPExcel is installed via Composer
 
 
 // Handle form submission to update department groups
