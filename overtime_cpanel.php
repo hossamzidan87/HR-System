@@ -25,7 +25,8 @@ if ($end_time_result->num_rows > 0) {
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST['rule_name'] === 'close_time') {
     $close_time = $_POST['close_time'];
     $onoff = $_POST['onoff'];
-    $update_sql = "UPDATE rules SET 20mins = '$close_time', end_time = '$close_time', onoff = '$onoff' WHERE name = 'close_time'";
+    $colose20 = date('Y-m-d H:i:s', strtotime($close_time));
+    $update_sql = "UPDATE rules SET 20mins = '$colose20', end_time = '$close_time', onoff = '$onoff' WHERE name = 'close_time'";
     if ($conn->query($update_sql) === TRUE) {
         echo "Close time updated successfully!";
     } else {
@@ -35,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST
 
 // Handle form submission to update the 20mins column
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_20mins'])) {
-    $current_time = date('H:i');
+    $current_time = date('Y-m-d H:i:s');
     $update_sql = "UPDATE rules SET 20mins = '$current_time' WHERE name = 'close_time'";
     if ($conn->query($update_sql) === TRUE) {
         echo "20mins column updated successfully!";
@@ -341,7 +342,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST
             <label for="onoff">Weekend On/Off:</label>
             <input type="radio" id="on" name="onoff" value="on" required>
             <label for="on">On</label>
-            <input type="radio" id="off" name="onoff" value="off" required checked="checked">
+            <input type="radio" id="off" name="onoff" value="off" required>
             <label for="off">Off</label>
         </div>
         <button type="submit">Update</button>

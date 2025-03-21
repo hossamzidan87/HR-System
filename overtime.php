@@ -16,10 +16,11 @@ if ($end_time_result->num_rows > 0) {
     $exception_20mins = $end_time_row['20mins']; // Retrieve the 20mins exception time
 
     $current_time = date('H:i:s');
+    $current_date_time = date('Y-m-d H:i:s');
     $current_day = date('w'); // 0 (Sunday) to 6 (Saturday)
 
     $new_end_time = date('H:i:s', strtotime($end_time . ' +0 hours'));
-    $exception_time = date('H:i:s', strtotime($exception_20mins . ' +20 minutes'));
+    $exception_time = date('Y-m-d H:i:s', strtotime($exception_20mins . ' +20 minutes'));
 
     // Check if today is Friday (5) or Saturday (6) and onoff is "off"
     if (($current_day == 5 || $current_day == 6) && $onoff_status === 'off') {
@@ -30,7 +31,8 @@ if ($end_time_result->num_rows > 0) {
     }
 
     // Check if current time is past end_time or within the 20mins exception
-    if ($current_time > $end_time && $current_time > $exception_time) {
+    if ($current_time > $end_time && $current_date_time > $exception_time || $exception_20mins > $current_date_time) {
+
         echo "<h3>Overtime submission is closed for today.</h3>";
         echo "<p>You cannot submit or edit overtime records after $new_end_time.</p>";
         echo "<a href='overtime_home.php'><img width='50' height='50' src='/images/icons/home.png' alt='home'></a>";

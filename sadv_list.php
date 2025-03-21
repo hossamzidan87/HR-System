@@ -42,7 +42,7 @@ $sadv_end = $rule['sadv_end'];
 $current_time = date('Y-m-d H:i:s');
 
 if ($current_time < $sadv_start || $current_time > $sadv_end) {
-    echo "<h3>This page is currently closed.</h3>";
+    echo "<h3>This page is currently closed and usually opens on the 17th of every month.</h3>";
     echo "<a href='welcome.php'><img width='50' height='50' src='/images/icons/home.png' alt='home'></a>";
     exit;
 }
