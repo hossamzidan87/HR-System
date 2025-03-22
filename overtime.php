@@ -31,7 +31,7 @@ if ($end_time_result->num_rows > 0) {
     }
 
     // Check if current time is past end_time or within the 20mins exception
-    if ($current_time > $end_time && $current_date_time > $exception_time || $exception_20mins > $current_date_time) {
+    if ($current_time > $end_time && ($current_date_time > $exception_time || $exception_20mins > $current_date_time)) {
 
         echo "<h3>Overtime submission is closed for today.</h3>";
         echo "<p>You cannot submit or edit overtime records after $new_end_time.</p>";

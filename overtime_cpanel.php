@@ -13,12 +13,13 @@ if (!isset($_SESSION['username']) || $_SESSION['username'] !== 'admin') {
 
 // Fetch end_time from roles table
 $role_name = 'close_time';
-$end_time_sql = "SELECT end_time FROM rules WHERE name = '$role_name'";
+$end_time_sql = "SELECT end_time, onoff FROM rules WHERE name = '$role_name'";
 $end_time_result = $conn->query($end_time_sql);
 
 if ($end_time_result->num_rows > 0) {
     $end_time_row = $end_time_result->fetch_assoc();
     $end_time = $end_time_row['end_time'];
+    $onoff = $end_time_row['onoff'];
 }
 
 // Handle form submission to update the close time
@@ -340,9 +341,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST
         </div>
         <div class="form-group">
             <label for="onoff">Weekend On/Off:</label>
-            <input type="radio" id="on" name="onoff" value="on" required>
+            <input type="radio" id="on" name="onoff" value="on" <?php echo ($onoff === 'on') ? 'checked' : ''; ?> required>
             <label for="on">On</label>
-            <input type="radio" id="off" name="onoff" value="off" required>
+            <input type="radio" id="off" name="onoff" value="off" <?php echo ($onoff === 'off') ? 'checked' : ''; ?> required>
             <label for="off">Off</label>
         </div>
         <button type="submit">Update</button>
