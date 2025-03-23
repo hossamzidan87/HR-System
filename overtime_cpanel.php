@@ -27,6 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST
     $close_time = $_POST['close_time'];
     $onoff = $_POST['onoff'];
     $colose20 = date('Y-m-d H:i:s', strtotime($close_time));
+    $colose20 = date('Y-m-d H:i:s', strtotime($colose20 . ' -20 minutes'));
     $update_sql = "UPDATE rules SET 20mins = '$colose20', end_time = '$close_time', onoff = '$onoff' WHERE name = 'close_time'";
     if ($conn->query($update_sql) === TRUE) {
         echo "Close time updated successfully!";
