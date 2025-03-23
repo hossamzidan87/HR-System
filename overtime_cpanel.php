@@ -72,20 +72,28 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST
 
     if (!empty($employee_codes)) {
         foreach ($employee_codes as $employee_code) {
-            $employee_sql = "SELECT employee_code, first_name, department, job FROM employees WHERE employee_code = '$employee_code'";
-            $employee_result = $conn->query($employee_sql);
-            if ($employee_result->num_rows > 0) {
-                $employee = $employee_result->fetch_assoc();
-                $insert_sql = "INSERT INTO overtime (employee_code, employee_name, department, job, bus_line_name, processed_by, processed_at, overtime_date)
-                               VALUES ('{$employee['employee_code']}', '{$employee['first_name']}', '{$employee['department']}', '{$employee['job']}', '', 'Admin', NOW(), '$selected_date')";
-                if ($conn->query($insert_sql) !== TRUE) {
-                    echo "Error adding employee code $employee_code: " . $conn->error;
+            // Check if the employee is already submitted for the selected date
+            $check_sql = "SELECT * FROM overtime WHERE employee_code = '$employee_code' AND overtime_date = '$selected_date'";
+            $check_result = $conn->query($check_sql);
+
+            if ($check_result->num_rows == 0) {
+                $employee_sql = "SELECT employee_code, first_name, department, job FROM employees WHERE employee_code = '$employee_code'";
+                $employee_result = $conn->query($employee_sql);
+                if ($employee_result->num_rows > 0) {
+                    $employee = $employee_result->fetch_assoc();
+                    $insert_sql = "INSERT INTO overtime (employee_code, employee_name, department, job, bus_line_name, processed_by, processed_at, overtime_date)
+                                   VALUES ('{$employee['employee_code']}', '{$employee['first_name']}', '{$employee['department']}', '{$employee['job']}', '', 'Admin', NOW(), '$selected_date')";
+                    if ($conn->query($insert_sql) !== TRUE) {
+                        echo "Error adding employee code $employee_code: " . $conn->error;
+                    }
+                } else {
+                    echo "Employee code $employee_code not found.<br>";
                 }
             } else {
-                echo "Employee code $employee_code not found.";
+                echo "Employee code $employee_code is already submitted for the selected date.<br>";
             }
         }
-        echo "Selected employees added successfully!";
+        echo "Selected employees added successfully!<br>";
     } else {
         echo "No employee codes entered.";
     }
