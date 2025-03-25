@@ -285,6 +285,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST
         </form>
         <div id="update_employeesForm" class="rule-form hidden">
             <h3>Update Employee Evaluation List</h3>
+            <h4>Code, Name, Department, Job, Starting Date and Gender</h4>
             <form method="POST" action="evaluation_cpanel.php" enctype="multipart/form-data">
                 <input type="hidden" name="rule_name" value="update_employees">
                 <div class="form-group">

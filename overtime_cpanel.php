@@ -407,6 +407,7 @@ function toggle(source) {
 
     <div id="update_employeesForm" class="rule-form" style="display:none;">
         <h3>Update Employees Table</h3>
+        <h4>Code, Name, Department, Job, Starting Date and Gender</h4>
         <form method="POST" action="overtime_cpanel.php" enctype="multipart/form-data">
             <input type="hidden" name="rule_name" value="update_employees">
             <div class="form-group">
