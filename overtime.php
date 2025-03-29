@@ -197,11 +197,13 @@ input[type="checkbox"]:hover {
         $today = date('Y-m-d');
         $next_day = date('Y-m-d', strtotime('+1 day'));
         $day_after_next = date('Y-m-d', strtotime('+2 days'));
+        $day_after_next1 = date('Y-m-d', strtotime('+9 days'));
 
         $date_options = [
             $today => date('l, Y-m-d', strtotime($today)),
             $next_day => date('l, Y-m-d', strtotime($next_day)),
             $day_after_next => date('l, Y-m-d', strtotime($day_after_next)),
+            $day_after_next1 => date('l, Y-m-d', strtotime($day_after_next1)),
         ];
 
         foreach ($date_options as $date_value => $date_label) {
