@@ -122,8 +122,8 @@ if ($current_time < $sadv_start || $current_time > $sadv_end) {
 // Fetch employees based on selected department
 function getEmployeesByDepartment($conn, $department, $departments_list) {
     $sql = ($department === 'all') ? 
-        "SELECT employee_code, first_name, department, job FROM employees WHERE department IN ($departments_list)" :
-        "SELECT employee_code, first_name, department, job FROM employees WHERE department = ?";
+        "SELECT employee_code, first_name, department, job FROM employees WHERE department IN ($departments_list) ORDER BY department, employee_code" :
+        "SELECT employee_code, first_name, department, job FROM employees WHERE department = ? ORDER BY employee_code";
     $stmt = $conn->prepare($sql);
     if ($department !== 'all') $stmt->bind_param("s", $department);
     $stmt->execute();

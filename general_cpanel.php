@@ -40,6 +40,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST
             }
         }
     }
+
+        // Delete existing departments
+        if (isset($_POST['delete_department']) && !empty($_POST['delete_department'])) {
+            $department = $_POST['delete_department'];
+                $delete_sql = "DELETE FROM department_groups WHERE department = '$department'"; 
+                if ($conn->query($delete_sql) !== TRUE) {
+                    echo "Error deleting department $department: " . $conn->error;
+                } else {
+                    echo "Department $department deleted successfully!";
+                }
+        }
 }
 
 // Handle form submission to update user permissions
@@ -350,41 +361,42 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['user_access'])) {
         <div id="update_department_groupsForm" class="rule-form" style="display:none;">
             <h3>Update Department Groups</h3>
             <form method="POST" action="general_cpanel.php">
-                <input type="hidden" name="rule_name" value="update_department_groups">
-                <div class="form-group">
-                    <label for="departments_to_update">Current Departments:</label>
-                    <div id="department_groups_list">
-                        <table>
-                        <?php
-                        $departments_sql = "SELECT department, group_name, group_name1, group_name2 FROM department_groups";
-                        $departments_result = $conn->query($departments_sql);
-                        if ($departments_result->num_rows > 0) {
-                            while ($row = $departments_result->fetch_assoc()) {
-                                echo "<tr><div><input type='hidden' name='departments_to_update[" . $row['department'] . "]' value='" . $row['department'] . "'></tr>";
-                                echo "<td>Department: <input type='text' name='departments_to_update[" . $row['department'] . "]' value='" . $row['department'] . "'></td>";
-                                echo "<td>Group Name: <input type='text' name='groups_to_update[" . $row['department'] . "][group_name]' value='" . $row['group_name'] . "'></td>";
-                                echo "<td>Group Name1: <input type='text' name='groups_to_update[" . $row['department'] . "][group_name1]' value='" . $row['group_name1'] . "'></td>";
-                                echo "<td>Group Name2: <input type='text' name='groups_to_update[" . $row['department'] . "][group_name2]' value='" . $row['group_name2'] . "'></td></div>";
-                            }
-                        } else {
-                            echo "No departments found.";
-                        }
-                        ?>
-                        </table>
-                    </div>
+            <input type="hidden" name="rule_name" value="update_department_groups">
+            <div class="form-group">
+                <label for="departments_to_update">Current Departments:</label>
+                <div id="department_groups_list">
+                <table>
+                <?php
+                $departments_sql = "SELECT department, group_name, group_name1, group_name2 FROM department_groups";
+                $departments_result = $conn->query($departments_sql);
+                if ($departments_result->num_rows > 0) {
+                    while ($row = $departments_result->fetch_assoc()) {
+                    echo "<tr><div><input type='hidden' name='departments_to_update[" . $row['department'] . "]' value='" . $row['department'] . "'></tr>";
+                    echo "<td>Department: <input type='text' name='departments_to_update[" . $row['department'] . "]' value='" . $row['department'] . "'></td>";
+                    echo "<td>Group Name: <input type='text' name='groups_to_update[" . $row['department'] . "][group_name]' value='" . $row['group_name'] . "'></td>";
+                    echo "<td>Group Name1: <input type='text' name='groups_to_update[" . $row['department'] . "][group_name1]' value='" . $row['group_name1'] . "'></td>";
+                    echo "<td>Group Name2: <input type='text' name='groups_to_update[" . $row['department'] . "][group_name2]' value='" . $row['group_name2'] . "'></td>";
+                    echo "<td><button type='submit' name='delete_department' value='" . $row['department'] . "'>Delete</button></td></div>";
+                    }
+                } else {
+                    echo "No departments found.";
+                }
+                ?>
+                </table>
                 </div>
-                <div class="form-group">
-                    <h4>Add New Department</h4>
-                    <label for="new_department">Department:</label>
-                    <input type="text" id="new_department" name="new_department"><br>
-                    <label for="new_group_name">Group Name:</label>
-                    <input type="text" id="new_group_name" name="new_group_name"><br>
-                    <label for="new_group_name1">Group Name1:</label>
-                    <input type="text" id="new_group_name1" name="new_group_name1"><br>
-                    <label for="new_group_name2">Group Name2:</label>
-                    <input type="text" id="new_group_name2" name="new_group_name2">
-                </div>
-                <button type="submit">Update</button>
+            </div>
+            <div class="form-group">
+                <h4>Add New Department</h4>
+                <label for="new_department">Department:</label>
+                <input type="text" id="new_department" name="new_department"><br>
+                <label for="new_group_name">Group Name:</label>
+                <input type="text" id="new_group_name" name="new_group_name"><br>
+                <label for="new_group_name1">Group Name1:</label>
+                <input type="text" id="new_group_name1" name="new_group_name1"><br>
+                <label for="new_group_name2">Group Name2:</label>
+                <input type="text" id="new_group_name2" name="new_group_name2">
+            </div>
+            <button type="submit">Update</button>
             </form>
         </div>
 

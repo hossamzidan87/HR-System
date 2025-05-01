@@ -42,15 +42,20 @@ if (!empty($user_groups)) {
     }
 }
 
-// Fetch the list of Saturdays from the calendar table
+// Fetch the list of Saturdays and holidays from the calendar table
 $saturdays = [];
-$saturday_sql = "SELECT saturday FROM calendar";
-$saturday_result = $conn->query($saturday_sql);
-if (!$saturday_result) {
+$holidays = [];
+$calendar_sql = "SELECT days, type FROM calendar";
+$calendar_result = $conn->query($calendar_sql);
+if (!$calendar_result) {
     die("Database error: " . $conn->error);
 }
-while ($row = $saturday_result->fetch_assoc()) {
-    $saturdays[] = $row['saturday'];
+while ($row = $calendar_result->fetch_assoc()) {
+    if ($row['type'] === 'saturday') {
+        $saturdays[] = $row['days'];
+    } elseif ($row['type'] === 'holiday') {
+        $holidays[] = $row['days'];
+    }
 }
 
 // Handle form submission
@@ -110,7 +115,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $employee_code = $row['employee_code'];
             $date = date('Y-m-d', strtotime($row['overtime_date']));
             $day_of_week = date('w', strtotime($date));
-            $hours = ($day_of_week == 5 || ($day_of_week == 6 && !in_array($date, $saturdays))) ? 8 : 2; // Friday (5) or Saturday (6) = 8 hours, other days = 2 hours
+            $hours = ($day_of_week == 5 || ($day_of_week == 6 && !in_array($date, $saturdays))) ? 8 : 2;
+            if (in_array($date, $holidays)) {
+                $hours = 0; // Exclude holidays
+            }
 
             if (!isset($employee_overtime[$employee_code])) {
                 $employee_overtime[$employee_code] = [
@@ -419,6 +427,9 @@ for ($i = 0; $i < $weeks_count; $i++) {
                                 if (in_array($department, $allowed_departments) && isset($dates[$date])) {
                                     $day_of_week = date('w', strtotime($date));
                                     $hours_per_employee = ($day_of_week == 5 || ($day_of_week == 6 && !in_array($date, $saturdays))) ? 8 : 2; // Friday (5) or Saturday (6) = 8 hours, other days = 2 hours
+                                    if (in_array($date, $holidays)) {
+                                        $hours_per_employee = 0; // Exclude holidays
+                                    }
                                     $total_hours += $dates[$date] * $hours_per_employee;
                                 }
                             }

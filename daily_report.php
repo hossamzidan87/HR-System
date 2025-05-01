@@ -204,7 +204,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['date']) && isset($_POS
                         SELECT 
                             employee_code,
                             SUM(CASE 
-                                WHEN DAYOFWEEK(overtime_date) IN (6, 7) AND overtime_date NOT IN (SELECT saturday FROM calendar) THEN 8 
+                                WHEN DAYOFWEEK(overtime_date) IN (6, 7) AND overtime_date NOT IN (SELECT days FROM calendar WHERE type = 'saturday') THEN 8 
+                                WHEN overtime_date IN (SELECT days FROM calendar WHERE type = 'holiday') THEN 0
                                 ELSE 2 
                             END) AS total_hours
                         FROM overtime

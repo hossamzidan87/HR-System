@@ -197,11 +197,13 @@ input[type="checkbox"]:hover {
         $today = date('Y-m-d');
         $next_day = date('Y-m-d', strtotime('+1 day'));
         $day_after_next = date('Y-m-d', strtotime('+2 days'));
+        $day_after_next1 = date('Y-m-d', strtotime('+3 days'));
 
         $date_options = [
             $today => date('l, Y-m-d', strtotime($today)),
             $next_day => date('l, Y-m-d', strtotime($next_day)),
             $day_after_next => date('l, Y-m-d', strtotime($day_after_next)),
+            $day_after_next1 => date('l, Y-m-d', strtotime($day_after_next1)),
 
         ];
 
@@ -295,11 +297,12 @@ input[type="checkbox"]:hover {
 
                     // Fetch employees based on allowed departments and who haven't been submitted today
                     $employees_sql = "SELECT e.*, 
-                                             COALESCE(SUM(CASE 
-                                                 WHEN o.overtime_date IS NOT NULL AND DAYOFWEEK(o.overtime_date) IN (6, 7) AND o.overtime_date NOT IN (SELECT saturday FROM calendar) THEN 8  
+                                             SUM(CASE 
+                                                 WHEN o.overtime_date IS NOT NULL AND DAYOFWEEK(o.overtime_date) IN (6, 7) AND o.overtime_date NOT IN (SELECT days FROM calendar WHERE type = 'saturday') THEN 8  
+                                                 WHEN o.overtime_date IS NOT NULL AND o.overtime_date IN (SELECT days FROM calendar WHERE type = 'holiday') THEN 0
                                                  WHEN o.overtime_date IS NOT NULL THEN 2 
                                                  ELSE 0
-                                             END), 0) AS total_hours
+                                             END) AS total_hours
                                       FROM employees e
                                       LEFT JOIN overtime o ON e.employee_code = o.employee_code 
                                           AND o.overtime_date BETWEEN '$week_start' AND '$week_end'
@@ -397,7 +400,8 @@ $submitted_employees_sql = "SELECT t.employee_code, t.employee_name, t.bus_line_
                             FROM (
                                 SELECT employee_code, employee_name, bus_line_name, department, job, 
                                        SUM(CASE 
-                                           WHEN DAYOFWEEK(overtime_date) IN (6, 7) AND overtime_date NOT IN (SELECT saturday FROM calendar) THEN 8  
+                                           WHEN DAYOFWEEK(overtime_date) IN (6, 7) AND overtime_date NOT IN (SELECT days FROM calendar WHERE type = 'saturday') THEN 8  
+                                           WHEN overtime_date IN (SELECT days FROM calendar WHERE type = 'holiday') THEN 0
                                            ELSE 2 
                                        END) AS total_hours_today
                                 FROM overtime
@@ -408,7 +412,8 @@ $submitted_employees_sql = "SELECT t.employee_code, t.employee_name, t.bus_line_
                             LEFT JOIN (
                                 SELECT employee_code, 
                                        SUM(CASE 
-                                           WHEN DAYOFWEEK(overtime_date) IN (6, 7) AND overtime_date NOT IN (SELECT saturday FROM calendar) THEN 8  
+                                           WHEN DAYOFWEEK(overtime_date) IN (6, 7) AND overtime_date NOT IN (SELECT days FROM calendar WHERE type = 'saturday') THEN 8  
+                                           WHEN overtime_date IN (SELECT days FROM calendar WHERE type = 'holiday') THEN 0
                                            ELSE 2 
                                        END) AS total_hours_week
                                 FROM overtime

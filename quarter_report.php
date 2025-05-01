@@ -86,7 +86,7 @@ if ($selected_employee) {
         .form-group { margin: 10px; }
         table { width: 100%; border-collapse: collapse; margin: 0 auto; }
         th, td { padding: 2px; text-align: center; border-bottom: 1px solid #ddd; white-space: nowrap; font-size: 12px; }
-        th { background-color: #4CAF50; color: white; white-space: wrap; font-size: 13px; }
+        th { background-color: #4CAF50; color: white; white-space: wrap; font-size: 13px; cursor: pointer; }
         tr:hover { background-color: #f5f5f5; }
         .image-container { display: flex; justify-content: flex-end; align-items: center; }
         .image-link { border: 1px solid #ddd; border-radius: 4px; padding: 5px; width: 25px; margin: 0 5px; display: inline-block; }
@@ -137,6 +137,26 @@ if ($selected_employee) {
         function showDepartmentReport() {
             document.getElementById('departmentTable').style.display = 'block';
             document.getElementById('employeeTable').style.display = 'none';
+        }
+
+        function sortTable(tableId, columnIndex) {
+            const table = document.getElementById(tableId);
+            const tbody = table.querySelector("tbody");
+            const rows = Array.from(tbody.rows); // Get all rows from tbody
+            const isAscending = table.getAttribute('data-sort-order') === 'asc';
+            const multiplier = isAscending ? 1 : -1;
+
+            rows.sort((a, b) => {
+                const aText = a.cells[columnIndex].innerText.trim();
+                const bText = b.cells[columnIndex].innerText.trim();
+                const aValue = isNaN(aText) ? aText.toLowerCase() : parseFloat(aText);
+                const bValue = isNaN(bText) ? bText.toLowerCase() : parseFloat(bText);
+
+                return aValue > bValue ? multiplier : aValue < bValue ? -multiplier : 0;
+            });
+
+            rows.forEach(row => tbody.appendChild(row)); // Re-append rows in sorted order
+            table.setAttribute('data-sort-order', isAscending ? 'desc' : 'asc');
         }
     </script>
 </head>
@@ -212,25 +232,29 @@ if ($selected_employee) {
 
         <div id="departmentTable" style="display: <?php echo $selected_employee ? 'none' : 'block'; ?>;">
             <h2>Departments Report</h2>
-            <table border="1">
-                <tr>
-                    <th>Employee Code</th>
-                    <th>Employee Name</th>
-                    <th>Department</th>
-                    <th>Job</th>
-                    <th>Exp</th>
-                    <th>Attendance</th>
-                    <th>Productivity</th>
-                    <th>Work Quality</th>
-                    <th>Communication Skills</th>
-                    <th>Job Knowledge</th>
-                    <th>Cooperation</th>
-                    <th>Technical Skills</th>
-                    <th>Commitment to Safety</th>
-                    <th>Attitude</th>
-                    <th>Creativity</th>
-                    <th>Total</th>
-                </tr>
+            <h2>Count of evaluated Employees <?php echo count($evaluations); ?></h2>
+            <table border="1" id="departmentTable" data-sort-order="asc">
+                <thead>
+                    <tr>
+                        <th onclick="sortTable('departmentTable', 0)">Employee Code</th>
+                        <th onclick="sortTable('departmentTable', 1)">Employee Name</th>
+                        <th onclick="sortTable('departmentTable', 2)">Department</th>
+                        <th onclick="sortTable('departmentTable', 3)">Job</th>
+                        <th onclick="sortTable('departmentTable', 4)">Exp</th>
+                        <th onclick="sortTable('departmentTable', 5)">Attendance</th>
+                        <th onclick="sortTable('departmentTable', 6)">Productivity</th>
+                        <th onclick="sortTable('departmentTable', 7)">Work Quality</th>
+                        <th onclick="sortTable('departmentTable', 8)">Communication Skills</th>
+                        <th onclick="sortTable('departmentTable', 9)">Job Knowledge</th>
+                        <th onclick="sortTable('departmentTable', 10)">Cooperation</th>
+                        <th onclick="sortTable('departmentTable', 11)">Technical Skills</th>
+                        <th onclick="sortTable('departmentTable', 12)">Commitment to Safety</th>
+                        <th onclick="sortTable('departmentTable', 13)">Attitude</th>
+                        <th onclick="sortTable('departmentTable', 14)">Creativity</th>
+                        <th onclick="sortTable('departmentTable', 15)">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
                 <?php foreach ($evaluations as $evaluation): ?>
                     <?php
                     $total = $evaluation['attendance'] + $evaluation['productivity'] + $evaluation['work_quality'] + $evaluation['communication_skills'] + $evaluation['job_knowledge'] + $evaluation['cooperation'] + $evaluation['technical_skills'] + $evaluation['commitment_to_safety'] + $evaluation['attitude'] + $evaluation['creativity'];
@@ -254,6 +278,7 @@ if ($selected_employee) {
                         <td><?php echo htmlspecialchars($total); ?></td>
                     </tr>
                 <?php endforeach; ?>
+                </tbody>
             </table>
         </div>
 

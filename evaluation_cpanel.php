@@ -201,6 +201,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST
         }
         th {
             background-color: #f2f2f2;
+            cursor: pointer;
         }
     </style>
     <script>
@@ -216,6 +217,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST
                     document.getElementById('not_evaluatedForm').submit();
                 }
             }
+        }
+
+        function sortTable(tableId, columnIndex) {
+            const table = document.getElementById(tableId);
+            const rows = Array.from(table.rows).slice(1); // Exclude header row
+            const isAscending = table.getAttribute('data-sort-order') === 'asc';
+            const direction = isAscending ? 1 : -1;
+
+            rows.sort((a, b) => {
+                const cellA = a.cells[columnIndex].innerText.trim();
+                const cellB = b.cells[columnIndex].innerText.trim();
+                return cellA.localeCompare(cellB, undefined, { numeric: true }) * direction;
+            });
+
+            rows.forEach(row => table.tBodies[0].appendChild(row));
+            table.setAttribute('data-sort-order', isAscending ? 'desc' : 'asc');
         }
     </script>
 </head>
@@ -302,11 +319,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST
             <?php if (!empty($not_evaluated)): ?>
             <div id="not_evaluatedResults" class="rule-form <?php echo $show_not_evaluated ? '' : 'hidden'; ?>">
                 <h3>Employees Not Evaluated</h3>
-                <table>
+                <table id="notEvaluatedTable" data-sort-order="asc">
                     <tr>
-                        <th>Department</th>
-                        <th>Number of Employees</th>
-                        <th>Number of Employees Not Evaluated</th>
+                        <th onclick="sortTable('notEvaluatedTable', 0)">Department</th>
+                        <th onclick="sortTable('notEvaluatedTable', 1)">Number of Employees</th>
+                        <th onclick="sortTable('notEvaluatedTable', 2)">Number of Employees Not Evaluated</th>
                     </tr>
                     <?php 
                     $total_not_evaluated = 0;

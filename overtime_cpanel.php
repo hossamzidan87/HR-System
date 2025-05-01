@@ -144,7 +144,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST
     }
 }
 
-
 // Handle form submission to update bus lines
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST['rule_name'] === 'update_bus_lines') {
     if (isset($_POST['new_bus_line']) && !empty($_POST['new_bus_line'])) {
@@ -168,38 +167,34 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST
     }
 }
 
-// Handle form submission to add Saturday dates to the calendar
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST['rule_name'] === 'add_saturday') {
-    $selected_date = $_POST['selected_date'];
-    $day_of_week = date('l', strtotime($selected_date));
+// Handle form submission to add Saturdays or holidays
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && ($_POST['rule_name'] === 'add_saturday' || $_POST['rule_name'] === 'add_holiday')) {
+    $selected_date = $_POST['selected_date'] ?? $_POST['holiday_date'];
+    $type = ($_POST['rule_name'] === 'add_saturday') ? 'saturday' : 'holiday';
 
-    if ($day_of_week === 'Saturday') {
-        // Check if the Saturday date already exists
-        $check_sql = "SELECT * FROM calendar WHERE saturday = '$selected_date'";
-        $check_result = $conn->query($check_sql);
+    $check_sql = "SELECT * FROM calendar WHERE days = '$selected_date' AND type = '$type'";
+    $check_result = $conn->query($check_sql);
 
-        if ($check_result->num_rows > 0) {
-            echo "Error: The selected Saturday date has already been added.";
-        } else {
-            $insert_sql = "INSERT INTO calendar (saturday) VALUES ('$selected_date')";
-            if ($conn->query($insert_sql) === TRUE) {
-                echo "Saturday date added successfully!";
-            } else {
-                echo "Error: " . $conn->error;
-            }
-        }
+    if ($check_result->num_rows > 0) {
+        echo "Error: The selected date has already been added as a $type.";
     } else {
-        echo "Error: The selected date is not a Saturday.";
+        $insert_sql = "INSERT INTO calendar (days, type) VALUES ('$selected_date', '$type')";
+        if ($conn->query($insert_sql) === TRUE) {
+            echo ucfirst($type) . " date added successfully!";
+        } else {
+            echo "Error: " . $conn->error;
+        }
     }
 }
 
-// Handle form submission to delete Saturday dates from the calendar
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST['rule_name'] === 'delete_saturday') {
-    $selected_date = $_POST['selected_date'];
+// Handle form submission to delete Saturdays or holidays
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && ($_POST['rule_name'] === 'delete_saturday' || $_POST['rule_name'] === 'delete_holiday')) {
+    $selected_date = $_POST['selected_date'] ?? $_POST['holiday_date'];
+    $type = ($_POST['rule_name'] === 'delete_saturday') ? 'saturday' : 'holiday';
 
-    $delete_sql = "DELETE FROM calendar WHERE saturday = '$selected_date'";
+    $delete_sql = "DELETE FROM calendar WHERE days = '$selected_date' AND type = '$type'";
     if ($conn->query($delete_sql) === TRUE) {
-        echo "Saturday date deleted successfully!";
+        echo ucfirst($type) . " date deleted successfully!";
     } else {
         echo "Error: " . $conn->error;
     }
@@ -334,6 +329,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST
         <option value="update_employees">Update Employees</option>
         <option value="update_bus_lines">Update Bus Lines</option>
         <option value="add_saturday">Add Excepted Saturdays</option>
+        <option value="add_holiday">Manage Holidays</option>
     </select>
 
 <div id="close_timeForm" class="rule-form" style="display:none;">
@@ -457,7 +453,7 @@ function toggle(source) {
     </div>
 
     <div id="add_saturdayForm" class="rule-form" style="display:none;">
-        <h3>Add of Saturdays except to the 8 hours</h3>
+        <h3>Add Saturdays</h3>
         <form method="POST" action="overtime_cpanel.php">
             <input type="hidden" name="rule_name" value="add_saturday">
             <div class="form-group">
@@ -467,7 +463,7 @@ function toggle(source) {
             <button type="submit">Add</button>
         </form>
 
-        <h3>Delete Excepted Saturdays</h3>
+        <h3>Delete Saturdays</h3>
         <form method="POST" action="overtime_cpanel.php">
             <input type="hidden" name="rule_name" value="delete_saturday">
             <div class="form-group">
@@ -475,14 +471,49 @@ function toggle(source) {
                 <select id="selected_date" name="selected_date" required>
                     <option value="">Select a Saturday</option>
                     <?php
-                    $saturdays_sql = "SELECT saturday FROM calendar";
+                    $saturdays_sql = "SELECT days FROM calendar WHERE type = 'saturday'";
                     $saturdays_result = $conn->query($saturdays_sql);
                     if ($saturdays_result->num_rows > 0) {
                         while ($row = $saturdays_result->fetch_assoc()) {
-                            echo "<option value='" . $row['saturday'] . "'>" . $row['saturday'] . "</option>";
+                            echo "<option value='" . $row['days'] . "'>" . $row['days'] . "</option>";
                         }
                     } else {
                         echo "<option value=''>No Saturdays found</option>";
+                    }
+                    ?>
+                </select>
+            </div>
+            <button type="submit">Delete</button>
+        </form>
+    </div>
+
+    <div id="add_holidayForm" class="rule-form" style="display:none;">
+        <h3>Add Holidays</h3>
+        <form method="POST" action="overtime_cpanel.php">
+            <input type="hidden" name="rule_name" value="add_holiday">
+            <div class="form-group">
+                <label for="holiday_date">Select Date:</label>
+                <input type="date" id="holiday_date" name="holiday_date" required>
+            </div>
+            <button type="submit">Add</button>
+        </form>
+
+        <h3>Delete Holidays</h3>
+        <form method="POST" action="overtime_cpanel.php">
+            <input type="hidden" name="rule_name" value="delete_holiday">
+            <div class="form-group">
+                <label for="holiday_date">Select Date:</label>
+                <select id="holiday_date" name="holiday_date" required>
+                    <option value="">Select a Holiday</option>
+                    <?php
+                    $holidays_sql = "SELECT days FROM calendar WHERE type = 'holiday'";
+                    $holidays_result = $conn->query($holidays_sql);
+                    if ($holidays_result->num_rows > 0) {
+                        while ($row = $holidays_result->fetch_assoc()) {
+                            echo "<option value='" . $row['days'] . "'>" . $row['days'] . "</option>";
+                        }
+                    } else {
+                        echo "<option value=''>No Holidays found</option>";
                     }
                     ?>
                 </select>
