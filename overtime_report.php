@@ -76,6 +76,9 @@ include 'page_access.php';
             <form method="POST" action="daily_report.php">
                 <button class="button" name="report_type" value="daily">Daily</button>
             </form>
+            <form method="POST" action="daily_night_report.php">
+                <button class="button" name="report_type" value="daily">Daily Night</button>
+            </form>
             <form method="GET" action="weekly_overtime.php">
                 <button class="button" name="report_type" value="weekly">Weekly</button>
             </form>

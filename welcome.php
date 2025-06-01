@@ -40,6 +40,10 @@ $username = $_SESSION['username'];
             <p>Overtime</p>
         </div>
         <div class="image-link">
+            <a href="shifts_home.php"><img src="\images\welcome\night.png" alt="Night Shift"></a>
+            <p>Night Shift</p>
+        </div>
+        <div class="image-link">
             <a href="evaluation.php"><img src="\images\welcome\evaluation.png" alt="Evaluation"></a>
             <p>Evaluation</p>
         </div>

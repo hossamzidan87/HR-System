@@ -95,13 +95,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if ($selected_department === 'all') {
         $overtime_sql = "SELECT employee_code, employee_name, department, job, overtime_date 
                          FROM overtime 
-                         WHERE department IN ('" . implode("','", $allowed_departments) . "') AND overtime_date BETWEEN ? AND ?";
+                         WHERE types = 'normal'
+                         AND department IN ('" . implode("','", $allowed_departments) . "') AND overtime_date BETWEEN ? AND ?";
         $stmt = $conn->prepare($overtime_sql);
         $stmt->bind_param("ss", $start_of_week, $end_of_week);
     } else {
         $overtime_sql = "SELECT employee_code, employee_name, department, job, overtime_date 
                          FROM overtime 
-                         WHERE department = ? AND overtime_date BETWEEN ? AND ?";
+                         WHERE types = 'normal'
+                         AND department = ? AND overtime_date BETWEEN ? AND ?";
         $stmt = $conn->prepare($overtime_sql);
         $stmt->bind_param("sss", $selected_department, $start_of_week, $end_of_week);
     }
@@ -202,7 +204,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $daily_submission_count_selected = [];
     $daily_submission_sql = "SELECT department, overtime_date, COUNT(DISTINCT employee_code) as submission_count 
                              FROM overtime 
-                             WHERE (department = ? OR ? = 'all') AND overtime_date BETWEEN ? AND ? 
+                             WHERE types = 'normal' 
+                             AND (department = ? OR ? = 'all') AND overtime_date BETWEEN ? AND ? 
                              GROUP BY department, overtime_date";
     $stmt = $conn->prepare($daily_submission_sql);
     $stmt->bind_param("ssss", $selected_department, $selected_department, $start_of_week, $end_of_week);

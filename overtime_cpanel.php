@@ -54,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST
 
     if (!empty($employees_to_delete)) {
         foreach ($employees_to_delete as $employee_code) {
-            $delete_sql = "DELETE FROM overtime WHERE employee_code = '$employee_code' AND overtime_date = '$selected_date'";
+            $delete_sql = "DELETE FROM overtime WHERE employee_code = '$employee_code' AND overtime_date = '$selected_date' AND types = 'normal'";
             if ($conn->query($delete_sql) !== TRUE) {
                 echo "Error deleting employee code $employee_code: " . $conn->error;
             }
@@ -73,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST
     if (!empty($employee_codes)) {
         foreach ($employee_codes as $employee_code) {
             // Check if the employee is already submitted for the selected date
-            $check_sql = "SELECT * FROM overtime WHERE employee_code = '$employee_code' AND overtime_date = '$selected_date'";
+            $check_sql = "SELECT * FROM overtime WHERE employee_code = '$employee_code' AND overtime_date = '$selected_date' AND types = 'normal'";
             $check_result = $conn->query($check_sql);
 
             if ($check_result->num_rows == 0) {
@@ -81,8 +81,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST
                 $employee_result = $conn->query($employee_sql);
                 if ($employee_result->num_rows > 0) {
                     $employee = $employee_result->fetch_assoc();
-                    $insert_sql = "INSERT INTO overtime (employee_code, employee_name, department, job, bus_line_name, processed_by, processed_at, overtime_date)
-                                   VALUES ('{$employee['employee_code']}', '{$employee['first_name']}', '{$employee['department']}', '{$employee['job']}', '', 'Admin', NOW(), '$selected_date')";
+                    $insert_sql = "INSERT INTO overtime (employee_code, employee_name, department, job, bus_line_name, processed_by, processed_at, overtime_date, types)
+                                   VALUES ('{$employee['employee_code']}', '{$employee['first_name']}', '{$employee['department']}', '{$employee['job']}', '', 'Admin', NOW(), '$selected_date', 'normal')";
                     if ($conn->query($insert_sql) !== TRUE) {
                         echo "Error adding employee code $employee_code: " . $conn->error;
                     }

@@ -417,7 +417,8 @@ $submitted_employees_sql = "SELECT t.employee_code, t.employee_name, t.bus_line_
                                            ELSE 2 
                                        END) AS total_hours_week
                                 FROM overtime
-                                WHERE overtime_date BETWEEN '$week_start' AND '$week_end'
+                                WHERE overtime_date BETWEEN '$week_start' AND '$week_end' 
+                                AND types = 'normal'
                                 GROUP BY employee_code
                             ) w ON t.employee_code = w.employee_code";
 

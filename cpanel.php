@@ -71,6 +71,7 @@ include 'page_access.php';
         <h1>Cpanel</h1>
         <a href="general_cpanel.php" class="link">General Cpanel</a>
         <a href="overtime_cpanel.php" class="link">OverTime Cpanel</a>
+        <a href="shifts_cpanel.php" class="link">Shifts Cpanel</a>
         <a href="evaluation_cpanel.php" class="link">Evaluation Cpanel</a>
         <a href="sadv_cpanel.php" class="link">Salary Adv Cpanel</a>
     </div>

@@ -143,7 +143,8 @@ function getOvertimeData($conn, $week_start, $week_end) {
                                         ELSE 2 
                                       END) AS total_hours 
             FROM overtime 
-            WHERE overtime_date BETWEEN ? AND ? 
+            WHERE types = 'normal' 
+            AND overtime_date BETWEEN ? AND ? 
             GROUP BY employee_code";
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("ss", $week_start, $week_end);

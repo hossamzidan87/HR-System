@@ -210,9 +210,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['date']) && isset($_POS
                             END) AS total_hours
                         FROM overtime
                         WHERE overtime_date BETWEEN '$week_start' AND '$selected_date'
+                        AND types = 'normal'
                         GROUP BY employee_code
                     ) AS aggregated_overtime ON ot.employee_code = aggregated_overtime.employee_code
                     WHERE $where_clause
+                    AND ot.types = 'normal'
                     AND ot.overtime_date = '$selected_date'
                     GROUP BY ot.department,ot.employee_code, ot.bus_line_name";
 
