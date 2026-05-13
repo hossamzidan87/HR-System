@@ -1,40 +1,39 @@
 <?php
 session_start();
 
-// Check if the session variable is set
-if (!isset($_SESSION['username'])) {
-    // Check for "remember me" cookie
-    if (isset($_COOKIE['remember_me'])) {
-        include 'db_connection.php'; // Include your database connection
+function restoreRememberedSession(mysqli $conn, string $token): ?string
+{
+    $result = $conn->query("SELECT username, remember_token FROM user_management WHERE remember_token IS NOT NULL AND remember_token <> ''");
 
-        $token = $_COOKIE['remember_me'];
-        $hashedToken = password_hash($token, PASSWORD_DEFAULT);
-        $stmt = $conn->prepare("SELECT username, remember_token FROM user_management WHERE remember_token = ?");
-        $stmt->bind_param("s", $hashedToken);
-        $stmt->execute();
-        $stmt->store_result();
-        if ($stmt->num_rows === 1) {
-            $stmt->bind_result($username, $dbHashedToken);
-            $stmt->fetch();
-            if (password_verify($token, $dbHashedToken)) {
-                $_SESSION['username'] = $username;
-            }
+    if (!$result) {
+        return null;
+    }
+
+    while ($row = $result->fetch_assoc()) {
+        if (!empty($row['remember_token']) && password_verify($token, $row['remember_token'])) {
+            return $row['username'];
         }
-        $stmt->close();
+    }
+
+    return null;
+}
+
+if (!isset($_SESSION['username'])) {
+    if (isset($_COOKIE['remember_me'])) {
+        include 'db_connection.php';
+
+        $rememberedUser = restoreRememberedSession($conn, $_COOKIE['remember_me']);
         $conn->close();
-        if(!isset($_SESSION['username'])){
-            setcookie('remember_me', '', time() - 3600, "/", "", true, true);
+
+        if ($rememberedUser !== null) {
+            $_SESSION['username'] = $rememberedUser;
+        } else {
+            setcookie('remember_me', '', time() - 3600, "/", "", false, true);
             header("Location: index.php");
             exit();
         }
-    }
-    else{
-        // Redirect to login page if session and cookie are not set
+    } else {
         header("Location: index.php");
         exit();
     }
 }
-
-// If the code reaches here, the user is logged in (either by session or "remember me")
-// You can access the username using $_SESSION['username']
-?>

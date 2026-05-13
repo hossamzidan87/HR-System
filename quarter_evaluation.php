@@ -2,431 +2,502 @@
 include 'check_cookies.php';
 include 'db_connection.php';
 include 'page_access.php';
+include 'includes/app_helpers.php';
 
-if (!isset($_SESSION['username'])) {
-    die("Unauthorized access. Please log in.");
+function quarter_evaluation_render_state_page(string $title, string $message, array $cards = []): void
+{
+    app_render_state_page('EV', 'Quarter Evaluation', 'Performance review workspace', 'Evaluation status', $title, $message, [
+        ['label' => 'Home', 'href' => 'welcome.php'],
+        ['label' => 'Evaluation', 'href' => 'evaluation.php'],
+        ['label' => 'Logout', 'href' => 'logout.php'],
+    ], array_merge([
+        ['title' => 'Workspace', 'text' => 'Quarterly review'],
+        ['title' => 'Next Step', 'text' => 'Return when the review window is open'],
+    ], $cards), [
+        ['label' => 'Back To Evaluation Home', 'href' => 'evaluation.php'],
+        ['label' => 'Dashboard', 'href' => 'welcome.php'],
+    ], 'Evaluation Status', 'This quarterly evaluation workspace is unavailable right now, but related navigation remains available.');
 }
 
-$username = $_SESSION['username'];
-
-// Initialize $selected_department and $selected_employee
-$selected_department = '';
-$selected_employee = '';
-$previous_evaluation = [];
-
-// Fetch allowed departments based on user groups
-$user_groups = [];
-$stmt = $conn->prepare("SELECT group_name_1, group_name_2, group_name_3 FROM user_permissions WHERE username = ?");
-if (!$stmt) {
-    die("Database error: " . $conn->error);
-}
-$stmt->bind_param("s", $username);
-$stmt->execute();
-$permissions_result = $stmt->get_result();
-
-if ($permissions_result->num_rows > 0) {
-    $user_permissions = $permissions_result->fetch_assoc();
-    foreach (['group_name_1', 'group_name_2', 'group_name_3'] as $group) {
-        if (!empty($user_permissions[$group])) {
-            $user_groups[] = $user_permissions[$group];
-        }
-    }
-}
-$stmt->close();
-
-$allowed_departments = [];
-if (!empty($user_groups)) {
-    $groups_in = implode("','", $user_groups);
-    $departments_sql = "SELECT DISTINCT department FROM department_groups WHERE group_name IN ('$groups_in') OR group_name1 IN ('$groups_in') OR group_name2 IN ('$groups_in')";
-    $departments_result = $conn->query($departments_sql);
-    if (!$departments_result) {
-        die("Database error: " . $conn->error);
-    }
-    while ($row = $departments_result->fetch_assoc()) {
-        $allowed_departments[] = $row['department'];
-    }
-}
-
-// Fetch the current quarter and evaluation period from the rules table
-$quarter = '';
-$year = '';
-$eva_start = '';
-$eva_end = '';
-$defined_rule = '';
-$quarter_sql = "SELECT quarter, year, eva_start, eva_end, defined_rule FROM rules WHERE defined_rule = quarter AND name = 'eva_q' LIMIT 1";
-$quarter_result = $conn->query($quarter_sql);
-if ($quarter_result && $quarter_result->num_rows > 0) {
-    $quarter_row = $quarter_result->fetch_assoc();
-    $quarter = $quarter_row['quarter'];
-    $year = $quarter_row['year'];
-    $eva_start = $quarter_row['eva_start'];
-    $eva_end = $quarter_row['eva_end'];
-    $defined_rule = $quarter_row['defined_rule'];
-} else {
-    die("Failed to fetch the current quarter and evaluation period.");
-}
-
-// Check if the current date and time are within the evaluation period and if the defined_rule matches the current quarter
-$current_datetime = new DateTime();
-$start_datetime = new DateTime($eva_start);
-$end_datetime = new DateTime($eva_end);
-
-if ($defined_rule !== $quarter) {
-    die("<div style='text-align: center; font-weight: bold; font-size: 22px; color: red; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);'>The defined rule does not match the current quarter.</div>");
-} elseif ($current_datetime < $start_datetime) {
-    $interval = $current_datetime->diff($start_datetime);
-    die("<div style='text-align: center; font-weight: bold; font-size: 22px; color: red; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);'>Evaluation period has not started yet. It will be available in " . $interval->format('%d days and %h hours') . ".<a href='welcome.php'><img src='/images/icons/home.png' alt='home' style='width:40px;height:40px;'></a><title>Evaluation Unavailable</title></div>");
-} elseif ($current_datetime > $end_datetime) {
-    die("<div style='text-align: center; font-weight: bold; font-size: 22px; color: red; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);'>Evaluation period has ended. Time out. ". $end_datetime->format('D d.m.Y H:i') . ".<a href='welcome.php'><img src='/images/icons/home.png' alt='home' style='width:40px;height:40px;'></a><title>Evaluation Unavailable</title></div>");
-}
-
-// Handle form submission
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    if (isset($_POST['select_department'])) {
-        $selected_department = filter_input(INPUT_POST, 'department', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-    } elseif (isset($_POST['select_employee'])) {
-        $selected_department = filter_input(INPUT_POST, 'department', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-        $selected_employee = filter_input(INPUT_POST, 'employee', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-
-        // Fetch previous evaluation for the selected employee, quarter, and year
-        $evaluation_sql = "SELECT * FROM evaluations WHERE employee_code = ? AND quarter = ? AND year = ? ORDER BY evaluation_date DESC LIMIT 1";
-        $stmt = $conn->prepare($evaluation_sql);
-        if (!$stmt) {
-            die("Database error: " . $conn->error);
-        }
-        $stmt->bind_param("ssi", $selected_employee, $quarter, $year);
-        $stmt->execute();
-        $evaluation_result = $stmt->get_result();
-        if ($evaluation_result->num_rows > 0) {
-            $previous_evaluation = $evaluation_result->fetch_assoc();
-        }
-        $stmt->close();
-    } elseif (isset($_POST['clear_evaluation'])) {
-        $selected_department = filter_input(INPUT_POST, 'department', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-        $selected_employee = filter_input(INPUT_POST, 'employee', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-
-        // Delete the evaluation for the selected employee, quarter, and year
-        $delete_sql = "DELETE FROM evaluations WHERE employee_code = ? AND quarter = ? AND year = ?";
-        $stmt = $conn->prepare($delete_sql);
-        if (!$stmt) {
-            die("Database error: " . $conn->error);
-        }
-        $stmt->bind_param("ssi", $selected_employee, $quarter, $year);
-        if ($stmt->execute()) {
-            echo "Evaluation cleared successfully!";
-        } else {
-            echo "Error: " . $stmt->error;
-        }
-        $stmt->close();
-    } else {
-        $selected_department = filter_input(INPUT_POST, 'department', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-        $selected_employee = filter_input(INPUT_POST, 'employee', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-        $evaluation_elements = [
-            'attendance' => filter_input(INPUT_POST, 'attendance', FILTER_VALIDATE_INT),
-            'productivity' => filter_input(INPUT_POST, 'productivity', FILTER_VALIDATE_INT),
-            'work_quality' => filter_input(INPUT_POST, 'work_quality', FILTER_VALIDATE_INT),
-            'communication_skills' => filter_input(INPUT_POST, 'communication_skills', FILTER_VALIDATE_INT),
-            'job_knowledge' => filter_input(INPUT_POST, 'job_knowledge', FILTER_VALIDATE_INT),
-            'cooperation' => filter_input(INPUT_POST, 'cooperation', FILTER_VALIDATE_INT),
-            'technical_skills' => filter_input(INPUT_POST, 'technical_skills', FILTER_VALIDATE_INT),
-            'commitment_to_safety' => filter_input(INPUT_POST, 'commitment_to_safety', FILTER_VALIDATE_INT),
-            'attitude' => filter_input(INPUT_POST, 'attitude', FILTER_VALIDATE_INT),
-            'creativity' => filter_input(INPUT_POST, 'creativity', FILTER_VALIDATE_INT),
-        ];
-
-        // Ensure all elements are rated
-        foreach ($evaluation_elements as $element => $rating) {
-            if ($rating === false || $rating < 1 || $rating > 10) {
-                die("All evaluation elements must be rated between 1 and 10.");
-            }
-        }
-
-        // Fetch job and employment_date for the selected employee
-        $employee_info_sql = "SELECT job, employment_date, first_name FROM eva_list WHERE employee_code = ?";
-        $stmt = $conn->prepare($employee_info_sql);
-        if (!$stmt) {
-            die("Database error: " . $conn->error);
-        }
-        $stmt->bind_param("s", $selected_employee);
-        $stmt->execute();
-        $employee_info_result = $stmt->get_result();
-        if ($employee_info_result->num_rows > 0) {
-            $employee_info = $employee_info_result->fetch_assoc();
-            $job = $employee_info['job'];
-            $employment_date = $employee_info['employment_date'];
-            $employee_name = $employee_info['first_name'];
-        } else {
-            die("Employee not found.");
-        }
-        $stmt->close();
-
-        // Fetch experience level
-        $exp = filter_input(INPUT_POST, 'exp', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-        if (!in_array($exp, ['A', 'B', 'C'])) {
-            die("Invalid experience level.");
-        }
-
-        // Check if an evaluation already exists for the selected employee, quarter, and year
-        $evaluation_check_sql = "SELECT * FROM evaluations WHERE employee_code = ? AND quarter = ? AND year = ?";
-        $stmt = $conn->prepare($evaluation_check_sql);
-        if (!$stmt) {
-            die("Database error: " . $conn->error);
-        }
-        $stmt->bind_param("ssi", $selected_employee, $quarter, $year);
-        $stmt->execute();
-        $evaluation_check_result = $stmt->get_result();
-        if ($evaluation_check_result->num_rows > 0) {
-            // Update existing evaluation
-            $stmt = $conn->prepare("UPDATE evaluations SET attendance = ?, productivity = ?, work_quality = ?, communication_skills = ?, job_knowledge = ?, cooperation = ?, technical_skills = ?, commitment_to_safety = ?, attitude = ?, creativity = ?, exp = ?, evaluated_by = ?, evaluation_date = NOW() WHERE employee_code = ? AND quarter = ? AND year = ?");
-            if (!$stmt) {
-                die("Database error: " . $conn->error);
-            }
-            $stmt->bind_param("iiiiiiiiiissssi", $evaluation_elements['attendance'], $evaluation_elements['productivity'], $evaluation_elements['work_quality'], $evaluation_elements['communication_skills'], $evaluation_elements['job_knowledge'], $evaluation_elements['cooperation'], $evaluation_elements['technical_skills'], $evaluation_elements['commitment_to_safety'], $evaluation_elements['attitude'], $evaluation_elements['creativity'], $exp, $username, $selected_employee, $quarter, $year);
-        } else {
-            // Insert new evaluation
-            $stmt = $conn->prepare("INSERT INTO evaluations (employee_code, employee_name, department, job, employment_date, attendance, productivity, work_quality, communication_skills, job_knowledge, cooperation, technical_skills, commitment_to_safety, attitude, creativity, exp, evaluated_by, quarter, year, evaluation_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())");
-            if (!$stmt) {
-                die("Database error: " . $conn->error);
-            }
-            $stmt->bind_param("sssssiiiiiiiiiisssi", $selected_employee, $employee_name, $selected_department, $job, $employment_date, $evaluation_elements['attendance'], $evaluation_elements['productivity'], $evaluation_elements['work_quality'], $evaluation_elements['communication_skills'], $evaluation_elements['job_knowledge'], $evaluation_elements['cooperation'], $evaluation_elements['technical_skills'], $evaluation_elements['commitment_to_safety'], $evaluation_elements['attitude'], $evaluation_elements['creativity'], $exp, $username, $quarter, $year);
-        }
-
-        if ($stmt->execute()) {
-            echo "Evaluation submitted successfully!";
-        } else {
-            echo "Error: " . $stmt->error;
-        }
-        $stmt->close();
-
-        // Fetch previous evaluation for the selected employee again to update the form with the latest values
-        $evaluation_sql = "SELECT * FROM evaluations WHERE employee_code = ? AND quarter = ? AND year = ? ORDER BY evaluation_date DESC LIMIT 1";
-        $stmt = $conn->prepare($evaluation_sql);
-        if (!$stmt) {
-            die("Database error: " . $conn->error);
-        }
-        $stmt->bind_param("ssi", $selected_employee, $quarter, $year);
-        $stmt->execute();
-        $evaluation_result = $stmt->get_result();
-        if ($evaluation_result->num_rows > 0) {
-            $previous_evaluation = $evaluation_result->fetch_assoc();
-        }
-        $stmt->close();
-    }
-}
-
-// Fetch employees based on selected department
-$employees = [];
-if (isset($selected_department) && $selected_department !== '') {
-    $employees_sql = "SELECT employee_code, first_name, department, job, employment_date FROM eva_list WHERE department = ?";
-    $stmt = $conn->prepare($employees_sql);
+function quarter_evaluation_fetch_previous(mysqli $conn, string $employee_code, string $quarter, int $year): array
+{
+    $evaluation_sql = 'SELECT * FROM evaluations WHERE employee_code = ? AND quarter = ? AND year = ? ORDER BY evaluation_date DESC LIMIT 1';
+    $stmt = $conn->prepare($evaluation_sql);
     if (!$stmt) {
-        die("Database error: " . $conn->error);
+        return [];
     }
-    $stmt->bind_param("s", $selected_department);
+    $stmt->bind_param('ssi', $employee_code, $quarter, $year);
     $stmt->execute();
-    $employees_result = $stmt->get_result();
-    while ($row = $employees_result->fetch_assoc()) {
-        $employees[] = $row;
+    $result = $stmt->get_result();
+    $record = $result->num_rows > 0 ? ($result->fetch_assoc() ?: []) : [];
+    $stmt->close();
+
+    return $record;
+}
+
+function quarter_evaluation_fetch_employee(mysqli $conn, string $employee_code): ?array
+{
+    $employee_sql = 'SELECT employee_code, first_name, department, job, employment_date FROM eva_list WHERE employee_code = ? LIMIT 1';
+    $stmt = $conn->prepare($employee_sql);
+    if (!$stmt) {
+        return null;
+    }
+    $stmt->bind_param('s', $employee_code);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $record = $result->num_rows > 0 ? ($result->fetch_assoc() ?: null) : null;
+    $stmt->close();
+
+    return $record;
+}
+
+$username = $_SESSION['username'] ?? '';
+if ($username === '') {
+    quarter_evaluation_render_state_page('Unauthorized', 'Please sign in again to continue.', [
+        ['title' => 'Session', 'text' => 'Authentication required'],
+    ]);
+}
+
+$user_groups = [];
+$stmt = $conn->prepare('SELECT group_name_1, group_name_2, group_name_3 FROM user_permissions WHERE username = ?');
+if ($stmt) {
+    $stmt->bind_param('s', $username);
+    $stmt->execute();
+    $permissions_result = $stmt->get_result();
+    if ($permissions_result->num_rows > 0) {
+        $user_permissions = $permissions_result->fetch_assoc();
+        foreach (['group_name_1', 'group_name_2', 'group_name_3'] as $group_key) {
+            if (!empty($user_permissions[$group_key])) {
+                $user_groups[] = $user_permissions[$group_key];
+            }
+        }
     }
     $stmt->close();
 }
 
-// Check if employees have been evaluated in the selected quarter and year
-$evaluated_employees = [];
-$evaluated_sql = "SELECT DISTINCT employee_code FROM evaluations WHERE quarter = ? AND year = ?";
-$stmt = $conn->prepare($evaluated_sql);
-if (!$stmt) {
-    die("Database error: " . $conn->error);
-}
-$stmt->bind_param("si", $quarter, $year);
-$stmt->execute();
-$evaluated_result = $stmt->get_result();
-if ($evaluated_result->num_rows > 0) {
-    while ($row = $evaluated_result->fetch_assoc()) {
-        $evaluated_employees[] = $row['employee_code'];
+$allowed_departments = [];
+if (!empty($user_groups)) {
+    $escaped_groups = array_map([$conn, 'real_escape_string'], $user_groups);
+    $groups_in = "'" . implode("','", $escaped_groups) . "'";
+    $departments_sql = "SELECT DISTINCT department FROM department_groups WHERE group_name IN ($groups_in) OR group_name1 IN ($groups_in) OR group_name2 IN ($groups_in) ORDER BY department";
+    $departments_result = $conn->query($departments_sql);
+    if ($departments_result) {
+        while ($row = $departments_result->fetch_assoc()) {
+            $allowed_departments[] = $row['department'];
+        }
     }
 }
-$stmt->close();
+
+$rule_sql = "SELECT quarter, year, eva_start, eva_end, defined_rule FROM rules WHERE defined_rule = quarter AND name = 'eva_q' LIMIT 1";
+$rule_result = $conn->query($rule_sql);
+if (!$rule_result || $rule_result->num_rows === 0) {
+    quarter_evaluation_render_state_page('Configuration Missing', 'The current quarterly evaluation rule could not be loaded.', [
+        ['title' => 'Rule Name', 'text' => 'eva_q'],
+    ]);
+}
+$rule = $rule_result->fetch_assoc();
+$quarter = (string) $rule['quarter'];
+$year = (int) $rule['year'];
+$eva_start = (string) $rule['eva_start'];
+$eva_end = (string) $rule['eva_end'];
+$defined_rule = (string) $rule['defined_rule'];
+
+$current_datetime = new DateTime();
+$start_datetime = new DateTime($eva_start);
+$end_datetime = new DateTime($eva_end);
+if ($defined_rule !== $quarter) {
+    quarter_evaluation_render_state_page('Rule Mismatch', 'The configured quarterly rule does not match the active quarter.', [
+        ['title' => 'Active Quarter', 'text' => $quarter],
+        ['title' => 'Configured Rule', 'text' => $defined_rule],
+    ]);
+}
+if ($current_datetime < $start_datetime) {
+    $interval = $current_datetime->diff($start_datetime);
+    quarter_evaluation_render_state_page('Evaluation Not Started', 'Quarterly evaluation opens in ' . $interval->format('%a day(s) and %h hour(s)') . '.', [
+        ['title' => 'Quarter', 'text' => $quarter . ' / ' . $year],
+        ['title' => 'Starts', 'text' => $eva_start],
+    ]);
+}
+if ($current_datetime > $end_datetime) {
+    quarter_evaluation_render_state_page('Evaluation Closed', 'The quarterly evaluation window ended on ' . $end_datetime->format('Y-m-d H:i') . '.', [
+        ['title' => 'Quarter', 'text' => $quarter . ' / ' . $year],
+        ['title' => 'Ended', 'text' => $end_datetime->format('Y-m-d H:i')],
+    ]);
+}
+
+$criteria = [
+    'attendance' => 'Attendance',
+    'productivity' => 'Productivity',
+    'work_quality' => 'Work quality',
+    'communication_skills' => 'Communication skills',
+    'job_knowledge' => 'Job knowledge',
+    'cooperation' => 'Cooperation',
+    'technical_skills' => 'Technical skills',
+    'commitment_to_safety' => 'Commitment to safety',
+    'attitude' => 'Attitude',
+    'creativity' => 'Creativity',
+];
+
+$flash_messages = [];
+$selected_department = trim((string) ($_POST['department'] ?? ''));
+$selected_employee = trim((string) ($_POST['employee'] ?? ''));
+$previous_evaluation = [];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['select_department'])) {
+        $selected_employee = '';
+    } elseif (isset($_POST['select_employee'])) {
+        if ($selected_employee !== '') {
+            $previous_evaluation = quarter_evaluation_fetch_previous($conn, $selected_employee, $quarter, $year);
+        }
+    } elseif (isset($_POST['clear_evaluation'])) {
+        if ($selected_employee !== '') {
+            $delete_sql = 'DELETE FROM evaluations WHERE employee_code = ? AND quarter = ? AND year = ?';
+            $stmt = $conn->prepare($delete_sql);
+            if ($stmt) {
+                $stmt->bind_param('ssi', $selected_employee, $quarter, $year);
+                $stmt->execute();
+                $stmt->close();
+                $flash_messages[] = 'Evaluation cleared successfully.';
+            }
+        }
+    } elseif (isset($_POST['save_evaluation'])) {
+        $ratings = [];
+        foreach ($criteria as $field => $label) {
+            $value = filter_input(INPUT_POST, $field, FILTER_VALIDATE_INT);
+            if ($value === false || $value < 1 || $value > 10) {
+                quarter_evaluation_render_state_page('Invalid Rating', 'Each evaluation element must be rated from 1 to 10.');
+            }
+            $ratings[$field] = $value;
+        }
+
+        $employee_info_sql = 'SELECT job, employment_date, first_name FROM eva_list WHERE employee_code = ?';
+        $stmt = $conn->prepare($employee_info_sql);
+        if (!$stmt) {
+            quarter_evaluation_render_state_page('Database Error', 'Employee information could not be loaded.');
+        }
+        $stmt->bind_param('s', $selected_employee);
+        $stmt->execute();
+        $employee_info_result = $stmt->get_result();
+        if ($employee_info_result->num_rows === 0) {
+            $stmt->close();
+            quarter_evaluation_render_state_page('Employee Missing', 'The selected employee could not be found in the evaluation list.');
+        }
+        $employee_info = $employee_info_result->fetch_assoc();
+        $stmt->close();
+
+        $exp = trim((string) ($_POST['exp'] ?? ''));
+        if (!in_array($exp, ['A', 'B', 'C'], true)) {
+            quarter_evaluation_render_state_page('Invalid Experience Level', 'Choose a valid experience level before saving.');
+        }
+
+        $evaluation_check_sql = 'SELECT employee_code FROM evaluations WHERE employee_code = ? AND quarter = ? AND year = ?';
+        $stmt = $conn->prepare($evaluation_check_sql);
+        if (!$stmt) {
+            quarter_evaluation_render_state_page('Database Error', 'The existing evaluation could not be checked.');
+        }
+        $stmt->bind_param('ssi', $selected_employee, $quarter, $year);
+        $stmt->execute();
+        $evaluation_check_result = $stmt->get_result();
+        $exists = $evaluation_check_result->num_rows > 0;
+        $stmt->close();
+
+        if ($exists) {
+            $sql = 'UPDATE evaluations SET attendance = ?, productivity = ?, work_quality = ?, communication_skills = ?, job_knowledge = ?, cooperation = ?, technical_skills = ?, commitment_to_safety = ?, attitude = ?, creativity = ?, exp = ?, evaluated_by = ?, evaluation_date = NOW() WHERE employee_code = ? AND quarter = ? AND year = ?';
+            $stmt = $conn->prepare($sql);
+            if ($stmt) {
+                $stmt->bind_param('iiiiiiiiiissssi', $ratings['attendance'], $ratings['productivity'], $ratings['work_quality'], $ratings['communication_skills'], $ratings['job_knowledge'], $ratings['cooperation'], $ratings['technical_skills'], $ratings['commitment_to_safety'], $ratings['attitude'], $ratings['creativity'], $exp, $username, $selected_employee, $quarter, $year);
+                $stmt->execute();
+                $stmt->close();
+                $flash_messages[] = 'Evaluation updated successfully.';
+            }
+        } else {
+            $sql = 'INSERT INTO evaluations (employee_code, employee_name, department, job, employment_date, attendance, productivity, work_quality, communication_skills, job_knowledge, cooperation, technical_skills, commitment_to_safety, attitude, creativity, exp, evaluated_by, quarter, year, evaluation_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())';
+            $stmt = $conn->prepare($sql);
+            if ($stmt) {
+                $stmt->bind_param('sssssiiiiiiiiiisssi', $selected_employee, $employee_info['first_name'], $selected_department, $employee_info['job'], $employee_info['employment_date'], $ratings['attendance'], $ratings['productivity'], $ratings['work_quality'], $ratings['communication_skills'], $ratings['job_knowledge'], $ratings['cooperation'], $ratings['technical_skills'], $ratings['commitment_to_safety'], $ratings['attitude'], $ratings['creativity'], $exp, $username, $quarter, $year);
+                $stmt->execute();
+                $stmt->close();
+                $flash_messages[] = 'Evaluation submitted successfully.';
+            }
+        }
+
+        $previous_evaluation = quarter_evaluation_fetch_previous($conn, $selected_employee, $quarter, $year);
+    }
+}
+
+if ($previous_evaluation === [] && $selected_employee !== '') {
+    $previous_evaluation = quarter_evaluation_fetch_previous($conn, $selected_employee, $quarter, $year);
+}
+
+$employees = [];
+if ($selected_department !== '') {
+    $employees_sql = 'SELECT employee_code, first_name, department, job, employment_date FROM eva_list WHERE department = ? ORDER BY employee_code';
+    $stmt = $conn->prepare($employees_sql);
+    if ($stmt) {
+        $stmt->bind_param('s', $selected_department);
+        $stmt->execute();
+        $employees_result = $stmt->get_result();
+        while ($row = $employees_result->fetch_assoc()) {
+            $employees[] = $row;
+        }
+        $stmt->close();
+    }
+}
+
+$permitted_employee_count = 0;
+if (!empty($allowed_departments)) {
+    $placeholders = implode(',', array_fill(0, count($allowed_departments), '?'));
+    $types = str_repeat('s', count($allowed_departments));
+    $permitted_sql = "SELECT COUNT(*) AS total FROM eva_list WHERE department IN ($placeholders)";
+    $stmt = $conn->prepare($permitted_sql);
+    if ($stmt) {
+        $stmt->bind_param($types, ...$allowed_departments);
+        $stmt->execute();
+        $permitted_result = $stmt->get_result();
+        if ($permitted_result && $permitted_result->num_rows > 0) {
+            $permitted_row = $permitted_result->fetch_assoc();
+            $permitted_employee_count = (int) ($permitted_row['total'] ?? 0);
+        }
+        $stmt->close();
+    }
+}
+
+$evaluated_employees = [];
+$evaluated_sql = '';
+if (!empty($allowed_departments)) {
+    $placeholders = implode(',', array_fill(0, count($allowed_departments), '?'));
+    $evaluated_sql = "SELECT DISTINCT employee_code FROM evaluations WHERE quarter = ? AND year = ? AND department IN ($placeholders)";
+    $stmt = $conn->prepare($evaluated_sql);
+    if ($stmt) {
+        $types = 'si' . str_repeat('s', count($allowed_departments));
+        $stmt->bind_param($types, $quarter, $year, ...$allowed_departments);
+        $stmt->execute();
+        $evaluated_result = $stmt->get_result();
+        while ($row = $evaluated_result->fetch_assoc()) {
+            $evaluated_employees[] = $row['employee_code'];
+        }
+        $stmt->close();
+    }
+}
+
+$evaluated_employee_lookup = [];
+foreach ($evaluated_employees as $evaluated_employee_code) {
+    $normalized_code = strtolower(trim((string) $evaluated_employee_code));
+    if ($normalized_code !== '') {
+        $evaluated_employee_lookup[$normalized_code] = true;
+    }
+}
+
+$selected_employee_record = null;
+foreach ($employees as $employee) {
+    if ($employee['employee_code'] === $selected_employee) {
+        $selected_employee_record = $employee;
+        break;
+    }
+}
+
+if ($selected_employee_record === null && $selected_employee !== '') {
+    $selected_employee_record = quarter_evaluation_fetch_employee($conn, $selected_employee);
+    if ($selected_employee_record !== null && $selected_department === '') {
+        $selected_department = (string) $selected_employee_record['department'];
+    }
+}
+
+$total_score = 0;
+foreach (array_keys($criteria) as $field) {
+    $total_score += (int) ($previous_evaluation[$field] ?? 0);
+}
+$average_score = count($criteria) > 0 ? round($total_score / count($criteria), 1) : 0;
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Employee Quarter Evaluation</title>
-    <style>
-        .container { width: 80%; margin: 0 auto; text-align: center; }
-        .form-group { margin: 10px; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background-color: #4CAF50; color: white; }
-        tr:hover { background-color: #f5f5f5; }
-        .image-container { display: flex; justify-content: flex-end; align-items: center; }
-        .image-link { border: 1px solid #ddd; border-radius: 4px; padding: 5px; width: 25px; margin: 0 5px; display: inline-block; }
-        .image-link:hover { box-shadow: 0 0 2px 1px rgba(0, 140, 186, 0.5); }
-        .image-link img { width: 100%; height: auto; display: block; }
-        .radio-group { display: flex; justify-content: center; align-items: center; }
-        .radio-group label { margin: 0 5px; }
-        .evaluation-table { border: 1px solid #ddd; border-radius: 4px; padding: 10px; margin-top: 20px; }
-        .evaluation-table th, .evaluation-table td { border: 1px solid #ddd; padding: 10px; }
-        .employee-photo { width: 100px; height: 130px; }
-        .form-group label {
-            font-size: 18px;
-            font-weight: bold;
-            margin-right: 8px;
-            margin-right: 8px;
-        }
-        .form-group select, .form-group input {
-            padding: 8px;
-            border: 1px solid #ccc;
-            font-weight: bold;
-            border-radius: 4px;
-            font-size: 12px;
-        }
-    </style>
-    <script>
-        function submitDepartmentForm() {
-            document.getElementById('departmentForm').submit();
-        }
-
-        function submitEmployeeForm() {
-            document.getElementById('employeeForm').submit();
-        }
-    </script>
+    <title>Quarter Evaluation</title>
+    <link rel="stylesheet" href="assets/css/app.css">
+    <link rel="icon" type="image/png" href="images/logo.png">
 </head>
 <body>
-    <div class="image-container">
-        <div class="image-link">
-            <a href="welcome.php"><img src="/images/icons/home.png" alt="home"></a>
-        </div>
-        <div class="image-link">
-            <a href="evaluation.php"><img src="/images/icons/evaluation.png" alt="Evaluation"></a>
-        </div>
-        <div class="image-link">
-            <a href="logout.php"><img src="/images/icons/logout.png" alt="logout"></a>
-        </div>
-    </div>
+<?php
+app_render_page_header('EV', 'Quarter Evaluation', 'Review and submit quarterly employee performance in one streamlined workspace.', [
+    ['label' => 'Home', 'href' => 'welcome.php'],
+    ['label' => 'Evaluation', 'href' => 'evaluation.php'],
+    ['label' => 'Logout', 'href' => 'logout.php'],
+]);
+app_render_page_hero('Quarterly review', 'A source-level rewrite with cleaner flow, live scoring, and maintainable criteria rendering.', 'The old repeated evaluation markup has been replaced with a single structured template that keeps the same database behavior while making reviews much easier to manage.', [
+    ['title' => 'Quarter', 'text' => $quarter],
+    ['title' => 'Year', 'text' => (string) $year],
+    ['title' => 'Window Ends', 'text' => $eva_end],
+]);
+app_open_content_panel('Choose Department And Employee', 'Select a department first, then pick the employee you want to evaluate for the active quarter.');
+?>
+<?php foreach ($flash_messages as $message): ?>
+    <div class="message-card"><?php echo app_escape($message); ?></div>
+<?php endforeach; ?>
 
-    <div class="container">
-        <h1>Employee Evaluation</h1>
-        <h2>Quarter: <span style="color: red;"><?php echo htmlspecialchars($quarter); ?></span> | Year: <span style="color: red;"><?php echo htmlspecialchars($year); ?></span> | End Date: <span style="color: red;"><?php echo htmlspecialchars($eva_end); ?></span></h2>
-        <form id="departmentForm" method="POST" action="quarter_evaluation.php">
-            <input type="hidden" name="select_department" value="1">
-            <div class="form-group">
-                <label for="department">Choose Department:</label>
-                <select id="department" name="department" required onchange="submitDepartmentForm()">
-                    <option value="">Select a department</option>
-                    <?php foreach ($allowed_departments as $department): ?>
-                        <option value="<?php echo htmlspecialchars($department); ?>" <?php echo (isset($selected_department) && $selected_department == $department) ? 'selected' : ''; ?>><?php echo htmlspecialchars($department); ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-        </form>
-        <form id="employeeForm" method="POST" action="quarter_evaluation.php">
-            <input type="hidden" name="select_employee" value="1">
-            <input type="hidden" name="department" value="<?php echo htmlspecialchars($selected_department); ?>">
-            <div class="form-group">
-                <label for="employee">Choose Employee:</label>
-                <select id="employee" name="employee" required onchange="submitEmployeeForm()">
-                    <option value="">Select an employee</option>
-                    <?php foreach ($employees as $employee): ?>
-                        <option value="<?php echo htmlspecialchars($employee['employee_code']); ?>" <?php echo (isset($selected_employee) && $selected_employee == $employee['employee_code']) ? 'selected' : ''; ?>>
-                            <?php echo htmlspecialchars($employee['employee_code'] . ' - ' . $employee['first_name']); ?>
-                            <?php if (in_array($employee['employee_code'], $evaluated_employees)): ?>
-                                &#10004; <!-- Check mark sign -->
-                            <?php endif; ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-        </form>
-        <?php if (!empty($selected_employee)): ?>
-            <form method="POST" action="quarter_evaluation.php">
-            <input type="hidden" name="department" value="<?php echo htmlspecialchars($selected_department); ?>">
-            <input type="hidden" name="employee" value="<?php echo htmlspecialchars($selected_employee); ?>">
-            <div class="evaluation-table">
-                <h3>Employee Information</h3>
-                <table>
-                <tr>
-                    <th>Photo</th>
-                    <th>Code</th>
-                    <th>Employee Name</th>
-                    <th>Department</th>
-                    <th>Job</th>
-                    <th>Employment Date</th>
-                </tr>
-                <?php foreach ($employees as $employee): ?>
-                    <?php if ($employee['employee_code'] == $selected_employee): ?>
-                    <tr>
-                        <td><img src="images/employees/<?php echo htmlspecialchars($employee['employee_code']); ?>.png" alt="Employee Photo" class="employee-photo"></td>
-                        <td><?php echo htmlspecialchars($employee['employee_code']); ?></td>
-                        <td><?php echo htmlspecialchars($employee['first_name']); ?></td>
-                        <td><?php echo htmlspecialchars($employee['department']); ?></td>
-                        <td><?php echo htmlspecialchars($employee['job']); ?></td>
-                        <td><?php echo htmlspecialchars($employee['employment_date']); ?></td>
-                    </tr>
-                    <?php endif; ?>
-                <?php endforeach; ?>
-                </table>
-            </div>
-            <div class="evaluation-table">
-                <h3>Experience level مستوى الخبره</h3>
-                <div class="radio-group">
-                    <label>
-                        <input type="radio" name="exp" value="A" <?php echo (isset($previous_evaluation['exp']) && $previous_evaluation['exp'] == 'A') ? 'checked' : ''; ?> required> A
-                    </label>
-                    <label>
-                        <input type="radio" name="exp" value="B" <?php echo (isset($previous_evaluation['exp']) && $previous_evaluation['exp'] == 'B') ? 'checked' : ''; ?> required> B
-                    </label>
-                    <label>
-                        <input type="radio" name="exp" value="C" <?php echo (isset($previous_evaluation['exp']) && $previous_evaluation['exp'] == 'C') ? 'checked' : ''; ?> required> C
-                    </label>
-                </div>
-            </div>
-            <div class="evaluation-table">
-                <h3>Evaluation Elements</h3>
-                <table>
-                <?php
-                $elements = [
-                    'attendance' => 'Attendance الحضور',
-                    'productivity' => 'Productivity الإنتاجيه',
-                    'work_quality' => 'Work Quality جودة العمل',
-                    'communication_skills' => 'Communication Skills مهارات الإتصال',
-                    'job_knowledge' => 'Job Knowledge معرفته بالوظيفه',
-                    'cooperation' => 'Cooperation التعاون',
-                    'technical_skills' => 'Technical Skills مهارات التقنية',
-                    'commitment_to_safety' => 'Commitment To Safety الألتزام بالسلامه',
-                    'attitude' => 'Attitude السلوك',
-                    'creativity' => 'Creativity الإبداع'
-                ];
-                $total_evaluation = 0;
-                $is_evaluated = !empty($previous_evaluation);
-                foreach ($elements as $element => $label): ?>
-                    <tr>
-                    <td><?php echo $label; ?>:</td>
-                    <td>
-                        <div class="radio-group">
-                        <?php for ($i = 1; $i <= 10; $i++): ?>
-                            <label>
-                            <input type="radio" id="<?php echo $element . $i; ?>" name="<?php echo $element; ?>" value="<?php echo $i; ?>" <?php echo (isset($previous_evaluation[$element]) && $previous_evaluation[$element] == $i) ? 'checked' : ''; ?> required>
-                            <?php echo $i; ?>
-                            </label>
-                        <?php endfor; ?>
-                        </div>
-                    </td>
-                    </tr>
-                    <?php if ($is_evaluated) $total_evaluation += $previous_evaluation[$element]; ?>
-                <?php endforeach; ?>
-                <tr style="background-color:rgb(57, 139, 60); color: white;">
-                    <td>Total Evaluation:</td>
-                    <td><?php echo $is_evaluated ? $total_evaluation : 'Not Evaluated Yet'; ?></td>
-                </tr>
-                </table>
-            </div>
-            <button type="submit" style="font-size: 16px; background-color: green; color: white; padding: 10px 20px; border: none; border-radius: 5px;">Submit Evaluation</button>
-            <button type="submit" name="clear_evaluation" value="1" style="font-size: 16px; background-color: green; color: white; padding: 10px 20px; border: none; border-radius: 5px;">Clear Evaluation</button>
-            </form>
-        <?php endif; ?>
+<div class="summary-grid">
+    <div class="summary-card"><strong>Accessible Departments</strong><p><?php echo count($allowed_departments); ?></p></div>
+    <div class="summary-card"><strong>Evaluated Employees</strong><p><?php echo count($evaluated_employees) . '/' . $permitted_employee_count; ?></p></div>
+    <div class="summary-card"><strong>Evaluation Start</strong><p><?php echo app_escape($eva_start); ?></p></div>
+    <div class="summary-card"><strong>Evaluation End</strong><p><?php echo app_escape($eva_end); ?></p></div>
+</div>
+
+<form id="quarterDepartmentForm" method="POST" action="quarter_evaluation.php">
+    <input type="hidden" name="select_department" value="1">
+    <div class="form-row">
+        <label for="department">Department</label>
+        <select id="department" name="department" required onchange="submitQuarterDepartmentForm()">
+            <option value="">Select a department</option>
+            <?php foreach ($allowed_departments as $department): ?>
+                <option value="<?php echo app_escape($department); ?>" <?php echo $selected_department === $department ? 'selected' : ''; ?>><?php echo app_escape($department); ?></option>
+            <?php endforeach; ?>
+        </select>
     </div>
+</form>
+
+<?php if ($selected_department !== ''): ?>
+    <form id="quarterEmployeeForm" method="POST" action="quarter_evaluation.php">
+        <input type="hidden" name="select_employee" value="1">
+        <input type="hidden" name="department" value="<?php echo app_escape($selected_department); ?>">
+        <div class="form-row">
+            <label for="employee">Employee</label>
+            <select id="employee" name="employee" required onchange="submitQuarterEmployeeForm()">
+                <option value="">Select an employee</option>
+                <?php foreach ($employees as $employee): ?>
+                    <?php $employee_code = trim((string) ($employee['employee_code'] ?? '')); ?>
+                    <option value="<?php echo app_escape($employee_code); ?>" <?php echo $selected_employee === $employee_code ? 'selected' : ''; ?>>
+                        <?php echo app_escape($employee_code . ' - ' . $employee['first_name']) . (isset($evaluated_employee_lookup[strtolower($employee_code)]) ? ' &#10004;' : ''); ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+    </form>
+<?php endif; ?>
+
+<?php if ($selected_employee_record !== null): ?>
+    <div class="stack-gap">
+        <section class="summary-card">
+            <strong>Employee Overview</strong>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Photo</th>
+                            <th>Code</th>
+                            <th>Name</th>
+                            <th>Department</th>
+                            <th>Job</th>
+                            <th>Employment Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><img src="images/employees/<?php echo app_escape($selected_employee_record['employee_code']); ?>.png" alt="Employee Photo" class="employee-photo"></td>
+                            <td><?php echo app_escape($selected_employee_record['employee_code']); ?></td>
+                            <td><?php echo app_escape($selected_employee_record['first_name']); ?></td>
+                            <td><?php echo app_escape($selected_employee_record['department']); ?></td>
+                            <td><?php echo app_escape($selected_employee_record['job']); ?></td>
+                            <td><?php echo app_escape($selected_employee_record['employment_date']); ?></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <form method="POST" action="quarter_evaluation.php" id="quarterEvaluationForm">
+            <input type="hidden" name="department" value="<?php echo app_escape($selected_department); ?>">
+            <input type="hidden" name="employee" value="<?php echo app_escape($selected_employee); ?>">
+
+            <div class="summary-grid">
+                <div class="summary-card"><strong>Total Score</strong><p id="quarterTotalScore"><?php echo $total_score; ?> / 100</p></div>
+                <div class="summary-card"><strong>Average</strong><p id="quarterAverageScore"><?php echo app_escape((string) $average_score); ?> / 10</p></div>
+                <div class="summary-card"><strong>Status</strong><p><?php echo $previous_evaluation === [] ? 'Not evaluated yet' : 'Saved for this quarter'; ?></p></div>
+            </div>
+
+            <section class="summary-card">
+                <strong>Experience Level</strong>
+                <p>Choose the experience level before saving the quarterly review.</p>
+                <div class="form-row">
+                    <label><input type="radio" name="exp" value="A" <?php echo (($previous_evaluation['exp'] ?? '') === 'A') ? 'checked' : ''; ?> required> A</label>
+                    <label><input type="radio" name="exp" value="B" <?php echo (($previous_evaluation['exp'] ?? '') === 'B') ? 'checked' : ''; ?>> B</label>
+                    <label><input type="radio" name="exp" value="C" <?php echo (($previous_evaluation['exp'] ?? '') === 'C') ? 'checked' : ''; ?>> C</label>
+                </div>
+            </section>
+
+            <section class="summary-card">
+                <strong>Evaluation Elements</strong>
+                <p>Rate each performance element from 1 to 10. The total and average update as you score.</p>
+                <div class="table-scroll">
+                    <table id="quarterEvaluationTable">
+                        <thead>
+                            <tr>
+                                <th>Element</th>
+                                <?php for ($score = 1; $score <= 10; $score++): ?>
+                                    <th><?php echo $score; ?></th>
+                                <?php endfor; ?>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($criteria as $field => $label): ?>
+                                <tr>
+                                    <td><?php echo app_escape($label); ?></td>
+                                    <?php for ($score = 1; $score <= 10; $score++): ?>
+                                        <td>
+                                            <input type="radio" name="<?php echo app_escape($field); ?>" value="<?php echo $score; ?>" <?php echo ((int) ($previous_evaluation[$field] ?? 0) === $score) ? 'checked' : ''; ?> required onchange="updateQuarterScore()">
+                                        </td>
+                                    <?php endfor; ?>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="panel-actions">
+                    <button type="submit" name="save_evaluation" value="1">Save Evaluation</button>
+                    <button type="submit" name="clear_evaluation" value="1">Clear Evaluation</button>
+                </div>
+            </section>
+        </form>
+    </div>
+<?php elseif ($selected_department !== ''): ?>
+    <div class="message-card">Choose an employee from the selected department to load the quarterly evaluation form.</div>
+<?php else: ?>
+    <div class="message-card">Choose a department to start the quarterly evaluation workflow.</div>
+<?php endif; ?>
+<?php
+app_close_content_panel();
+app_render_page_end();
+?>
+<script>
+function submitQuarterDepartmentForm() {
+    document.getElementById('quarterDepartmentForm').submit();
+}
+
+function submitQuarterEmployeeForm() {
+    document.getElementById('quarterEmployeeForm').submit();
+}
+
+function updateQuarterScore() {
+    const totalNode = document.getElementById('quarterTotalScore');
+    const averageNode = document.getElementById('quarterAverageScore');
+    if (!totalNode || !averageNode) {
+        return;
+    }
+    let total = 0;
+    let count = 0;
+    document.querySelectorAll('#quarterEvaluationTable tbody tr').forEach((row) => {
+        const checked = row.querySelector('input[type="radio"]:checked');
+        if (checked) {
+            total += parseInt(checked.value, 10);
+            count += 1;
+        }
+    });
+    totalNode.textContent = total + ' / 100';
+    averageNode.textContent = (count ? (total / count).toFixed(1) : '0.0') + ' / 10';
+}
+
+updateQuarterScore();
+</script>
 </body>
 </html>

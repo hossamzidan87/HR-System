@@ -2,6 +2,7 @@
 include 'check_cookies.php';
 include 'db_connection.php';
 include 'page_access.php';
+include 'includes/app_helpers.php';
 require 'vendor/autoload.php'; // Ensure PHPExcel is installed via Composer
 
 // Check if the logged-in user is 'admin'
@@ -49,23 +50,36 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_20mins'])) {
 
 // Handle form submission to delete employees
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST['rule_name'] === 'delete_employees') {
-    $selected_date = $_POST['selected_date'];
-    $employees_to_delete = isset($_POST['employees_to_delete']) ? $_POST['employees_to_delete'] : [];
+    $selected_date = isset($_POST['selected_date']) ? $conn->real_escape_string($_POST['selected_date']) : '';
+    $employees_to_delete = isset($_POST['employees_to_delete']) ? array_filter($_POST['employees_to_delete'], 'strlen') : [];
 
-    if (!empty($employees_to_delete)) {
-        foreach ($employees_to_delete as $employee_code) {
-            $delete_sql = "DELETE FROM overtime WHERE employee_code = '$employee_code' AND overtime_date = '$selected_date'";
-            if ($conn->query($delete_sql) !== TRUE) {
-                echo "Error deleting employee code $employee_code: " . $conn->error;
-            }
+    if (!empty($employees_to_delete) && $selected_date !== '') {
+        // sanitize and quote values for a single DELETE query
+        $escaped = array_map(function($code) use ($conn) {
+            return "'" . $conn->real_escape_string(trim($code)) . "'";
+        }, $employees_to_delete);
+        $in_clause = implode(',', $escaped);
+
+        // run one DELETE instead of many individual queries
+        $conn->begin_transaction();
+        $delete_sql = "DELETE FROM overtime
+                       WHERE employee_code IN ($in_clause)
+                         AND overtime_date = '$selected_date'
+                         AND types = 'normal'";
+        if ($conn->query($delete_sql) === TRUE) {
+            $deleted_rows = $conn->affected_rows;
+            $conn->commit();
+            echo "Deleted $deleted_rows employee(s) successfully!";
+        } else {
+            $conn->rollback();
+            echo "Error deleting employees: " . $conn->error;
         }
-        echo "Selected employees deleted successfully!";
     } else {
-        echo "No employees selected for deletion.";
+        echo "No employees selected for deletion or invalid date.";
     }
 }
 
-// Handle form submission to submit employees into overtime
+// Handle form submission to submit employees into overtime (individual)
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST['rule_name'] === 'submit_employees') {
     $selected_date = $_POST['selected_date'];
     $employee_codes = isset($_POST['employee_codes']) ? $_POST['employee_codes'] : [];
@@ -73,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST
     if (!empty($employee_codes)) {
         foreach ($employee_codes as $employee_code) {
             // Check if the employee is already submitted for the selected date
-            $check_sql = "SELECT * FROM overtime WHERE employee_code = '$employee_code' AND overtime_date = '$selected_date'";
+            $check_sql = "SELECT * FROM overtime WHERE employee_code = '$employee_code' AND overtime_date = '$selected_date' AND types = 'normal'";
             $check_result = $conn->query($check_sql);
 
             if ($check_result->num_rows == 0) {
@@ -81,8 +95,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST
                 $employee_result = $conn->query($employee_sql);
                 if ($employee_result->num_rows > 0) {
                     $employee = $employee_result->fetch_assoc();
-                    $insert_sql = "INSERT INTO overtime (employee_code, employee_name, department, job, bus_line_name, processed_by, processed_at, overtime_date)
-                                   VALUES ('{$employee['employee_code']}', '{$employee['first_name']}', '{$employee['department']}', '{$employee['job']}', '', 'Admin', NOW(), '$selected_date')";
+                    $insert_sql = "INSERT INTO overtime (employee_code, employee_name, department, job, bus_line_name, processed_by, processed_at, overtime_date, types)
+                                   VALUES ('{$employee['employee_code']}', '{$employee['first_name']}', '{$employee['department']}', '{$employee['job']}', '', 'Admin', NOW(), '$selected_date', 'normal')";
                     if ($conn->query($insert_sql) !== TRUE) {
                         echo "Error adding employee code $employee_code: " . $conn->error;
                     }
@@ -96,6 +110,73 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST
         echo "Selected employees added successfully!<br>";
     } else {
         echo "No employee codes entered.";
+    }
+}
+
+// Handle form submission to submit employees via Excel
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && $_POST['rule_name'] === 'submit_employees_excel') {
+    if (isset($_FILES['overtime_file']) && $_FILES['overtime_file']['error'] === UPLOAD_ERR_OK) {
+        $file_tmp = $_FILES['overtime_file']['tmp_name'];
+        $selected_date = $_POST['selected_date_excel'];
+
+        try {
+            $inputFileType = \PhpOffice\PhpSpreadsheet\IOFactory::identify($file_tmp);
+            $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReader($inputFileType);
+            $spreadsheet = $reader->load($file_tmp);
+            $sheet = $spreadsheet->getActiveSheet();
+            $data = $sheet->toArray();
+
+            $added_count = 0;
+            $duplicate_count = 0;
+            $not_found_count = 0;
+
+            foreach ($data as $row) {
+                if (!empty($row[0])) {
+                    $employee_code = trim($row[0]);
+
+                    // Check if already submitted
+                    $check_sql = "SELECT * FROM overtime WHERE employee_code = ? AND overtime_date = ? AND types = 'normal'";
+                    $stmt = $conn->prepare($check_sql);
+                    $stmt->bind_param("ss", $employee_code, $selected_date);
+                    $stmt->execute();
+                    $check_result = $stmt->get_result();
+
+                    if ($check_result->num_rows == 0) {
+                        // Fetch employee details
+                        $employee_sql = "SELECT employee_code, first_name, department, job FROM employees WHERE employee_code = ?";
+                        $emp_stmt = $conn->prepare($employee_sql);
+                        $emp_stmt->bind_param("s", $employee_code);
+                        $emp_stmt->execute();
+                        $employee_result = $emp_stmt->get_result();
+
+                        if ($employee_result->num_rows > 0) {
+                            $employee = $employee_result->fetch_assoc();
+                            $insert_sql = "INSERT INTO overtime (employee_code, employee_name, department, job, bus_line_name, processed_by, processed_at, overtime_date, types)
+                                           VALUES (?, ?, ?, ?, '', 'Admin', NOW(), ?, 'normal')";
+                            $insert_stmt = $conn->prepare($insert_sql);
+                            $insert_stmt->bind_param("sssss", $employee['employee_code'], $employee['first_name'], $employee['department'], $employee['job'], $selected_date);
+                            if ($insert_stmt->execute()) {
+                                $added_count++;
+                            }
+                            $insert_stmt->close();
+                        } else {
+                            $not_found_count++;
+                        }
+                        $emp_stmt->close();
+                    } else {
+                        $duplicate_count++;
+                    }
+                    $stmt->close();
+                }
+            }
+
+            echo "Excel upload completed!<br>";
+            echo "Added: $added_count | Duplicates: $duplicate_count | Not Found: $not_found_count<br>";
+        } catch (Exception $e) {
+            echo "Error processing file: " . $e->getMessage();
+        }
+    } else {
+        echo "Error uploading file. Please try again.";
     }
 }
 
@@ -180,7 +261,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && ($_POS
     } else {
         $insert_sql = "INSERT INTO calendar (days, type) VALUES ('$selected_date', '$type')";
         if ($conn->query($insert_sql) === TRUE) {
-            echo ucfirst($type) . " date added successfully!";
+            ucfirst($type) . " date added successfully!";
         } else {
             echo "Error: " . $conn->error;
         }
@@ -194,9 +275,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && ($_POS
 
     $delete_sql = "DELETE FROM calendar WHERE days = '$selected_date' AND type = '$type'";
     if ($conn->query($delete_sql) === TRUE) {
-        echo ucfirst($type) . " date deleted successfully!";
+        ucfirst($type) . " date deleted successfully!";
     } else {
         echo "Error: " . $conn->error;
+    }
+}
+
+$active_rule = '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['update_20mins'])) {
+        $active_rule = 'close_time';
+    } elseif (isset($_POST['rule_name'])) {
+        $rule_name = $_POST['rule_name'];
+        if ($rule_name === 'delete_saturday') {
+            $active_rule = 'add_saturday';
+        } elseif ($rule_name === 'delete_holiday') {
+            $active_rule = 'add_holiday';
+        } else {
+            $active_rule = $rule_name;
+        }
     }
 }
 ?>
@@ -213,16 +310,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && ($_POS
         }
     </style>
     <script>
-        function showRuleForm() {
-            var ruleName = document.getElementById("ruleSelect").value;
+        function showRuleForm(ruleName) {
             var forms = document.getElementsByClassName("rule-form");
+            var tabs = document.getElementsByClassName("panel-tab");
             for (var i = 0; i < forms.length; i++) {
                 forms[i].style.display = "none";
             }
-            if (ruleName === "register") {
-                window.location.href = "register.php";
-            } else if (ruleName !== "") {
+            for (var j = 0; j < tabs.length; j++) {
+                tabs[j].classList.remove("active");
+            }
+            if (ruleName !== "") {
                 document.getElementById(ruleName + "Form").style.display = "block";
+                var tabButton = document.querySelector('.panel-tab[data-target="' + ruleName + '"]');
+                if (tabButton) {
+                    tabButton.classList.add('active');
+                }
             }
         }
 
@@ -241,44 +343,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && ($_POS
                 document.getElementById("employeeList").innerHTML = "";
             }
         }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            var initialRule = document.body.getAttribute('data-active-rule') || '';
+            if (initialRule) {
+                showRuleForm(initialRule);
+            }
+        });
     </script>
-        <style>
-            .image-container { /* New container */
-    display: flex;
-    justify-content: flex-end; /* Align items to the right */
-    align-items: center; /* Vertically center items */
-}
-
-.image-link {
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    padding: 5px;
-    width: 25px; /* Adjust as needed */
-    margin: 0 5px; /* Space between images */
-    display: inline-block; /* to prevent collapsing margins */
-}
-
-.image-link:hover {
-    box-shadow: 0 0 2px 1px rgba(0, 140, 186, 0.5);
-}
-
-.image-link img {
-    width: 100%; /* Make image fill container */
-    height: auto; /* Maintain aspect ratio */
-    display: block; /* Prevents small gap below image */
-}
-        .container {
-            width: 80%;
-            margin: 0 auto;
-            text-align: center;
-            padding: 50px;
-        }
-        .container select{
-            width: 20%;
-            margin: 0 auto;
-            text-align: center;
-            padding: 8px;
-        }
+    <style>
         .rule-form {
             margin: 16px 0;
         }
@@ -302,35 +375,54 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['rule_name']) && ($_POS
         .rule-form button:hover {
             background-color: #0056b3;
         }
+        .panel-tabbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 10px 0 18px;
+        }
+        .panel-tab {
+            border: 1px solid #cfd7df;
+            background: #f3f6fa;
+            color: #1f2d3d;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .panel-tab.active {
+            background: #0a4d8c;
+            color: #fff;
+            border-color: #0a4d8c;
+        }
 
     </style>
+    <link rel="stylesheet" href="assets/css/app.css">
+    <link rel="icon" type="image/png" href="images/logo.png">
 </head>
-<body>
-        <div class="image-container">
-
-    <div class="image-link">
-        <a href="welcome.php"><img src="/images/icons/home.png" alt="home"></a>
+<body data-active-rule="<?php echo htmlspecialchars($active_rule); ?>">
+<?php
+app_render_page_header('OC', 'Overtime Cpanel', 'Manage overtime rules and submitted employees.', [
+    ['label' => 'Home', 'href' => 'welcome.php'],
+    ['label' => 'Cpanel', 'href' => 'cpanel.php'],
+    ['label' => 'Logout', 'href' => 'logout.php'],
+]);
+app_render_page_hero('Admin area', 'Manage overtime settings and employee lists.', 'Use the select menu to choose an option to modify.', [
+    ['title' => 'Close Time', 'text' => $end_time ? date('H:i', strtotime($end_time)) : 'Not set'],
+    ['title' => 'Weekend', 'text' => $onoff === 'on' ? 'On' : 'Off'],
+]);
+app_open_content_panel('Overtime Control Panel', 'Select an option from the dropdown below.');
+?>
+    <div class="panel-tabbar">
+        <button type="button" class="panel-tab" data-target="close_time" onclick="showRuleForm('close_time')">Change Close Time</button>
+        <button type="button" class="panel-tab" data-target="delete_employees" onclick="showRuleForm('delete_employees')">Delete Submitted Employees</button>
+        <button type="button" class="panel-tab" data-target="submit_employees" onclick="showRuleForm('submit_employees')">Submit Employees (Individual)</button>
+        <button type="button" class="panel-tab" data-target="submit_employees_excel" onclick="showRuleForm('submit_employees_excel')">Submit Employees (Excel)</button>
+        <button type="button" class="panel-tab" data-target="update_employees" onclick="showRuleForm('update_employees')">Update Employees</button>
+        <button type="button" class="panel-tab" data-target="update_bus_lines" onclick="showRuleForm('update_bus_lines')">Update Bus Lines</button>
+        <button type="button" class="panel-tab" data-target="add_saturday" onclick="showRuleForm('add_saturday')">Add Excepted Saturdays</button>
+        <button type="button" class="panel-tab" data-target="add_holiday" onclick="showRuleForm('add_holiday')">Manage Holidays</button>
     </div>
-    <div class="image-link">
-        <a href="cpanel.php"><img src="/images/icons/cpanel.png" alt="Cpanel"></a>
-    </div>
-    <div class="image-link">
-        <a href="logout.php"><img src="/images/icons/logout.png" alt="logout"></a>
-    </div>
-</div>
-<div class="container">
-    <h2>Control Panel</h2>
-    <label for="ruleSelect">Select Rule:</label>
-    <select id="ruleSelect" onchange="showRuleForm()">
-        <option value="">Select a rule</option>
-        <option value="close_time">Change Close Time</option>
-        <option value="delete_employees">Delete Submitted Employees</option>
-        <option value="submit_employees">Submit Employees</option>
-        <option value="update_employees">Update Employees</option>
-        <option value="update_bus_lines">Update Bus Lines</option>
-        <option value="add_saturday">Add Excepted Saturdays</option>
-        <option value="add_holiday">Manage Holidays</option>
-    </select>
 
 <div id="close_timeForm" class="rule-form" style="display:none;">
     <h3>Change Close Time</h3>
@@ -396,6 +488,22 @@ function toggle(source) {
                         <input type="text" name="employee_codes[]" placeholder="Employee Code"><br>
                     <?php endfor; ?>
                 </div>
+            </div>
+            <button type="submit">Submit</button>
+        </form>
+    </div>
+
+    <div id="submit_employees_excelForm" class="rule-form" style="display:none;">
+        <h3>Submit Employees into Overtime (Excel)</h3>
+        <form method="POST" action="overtime_cpanel.php" enctype="multipart/form-data">
+            <input type="hidden" name="rule_name" value="submit_employees_excel">
+            <div class="form-group">
+                <label for="selected_date_excel">Select Date:</label>
+                <input type="date" id="selected_date_excel" name="selected_date_excel" required>
+            </div>
+            <div class="form-group">
+                <label for="overtime_file">Upload Excel File (Employee Codes in Column A):</label>
+                <input type="file" id="overtime_file" name="overtime_file" accept=".xlsx,.xls" required>
             </div>
             <button type="submit">Submit</button>
         </form>
@@ -521,6 +629,10 @@ function toggle(source) {
             <button type="submit">Delete</button>
         </form>
     </div>
-</div>
+<?php
+app_close_content_panel();
+app_render_page_end();
+?>
+<script src="assets/js/app.js"></script>
 </body>
 </html>

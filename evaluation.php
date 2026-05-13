@@ -2,7 +2,12 @@
 include 'check_cookies.php';
 include 'db_connection.php';
 include 'page_access.php';
+include 'includes/app_helpers.php';
+
 $username = $_SESSION['username'];
+$accessMap = app_get_access_map($conn, $username);
+$modules = app_get_dashboard_modules($accessMap, $username);
+$currentModule = app_get_module_by_id($modules, 'evaluation');
 ?>
 
 <!DOCTYPE html>
@@ -11,77 +16,65 @@ $username = $_SESSION['username'];
     <title>Evaluation Home</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        .container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            gap: 20px;
-        }
-        .image-link {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        .image-link img {
-            width: 100px;
-            height: 100px;
-        }
-        .image-link:hover {
-            box-shadow: 0 0 2px 1px rgba(0, 140, 186, 0.5);
-        }
-        .ico-container { /* New container */
-    display: flex;
-    justify-content: flex-end; /* Align items to the right */
-    align-items: center; /* Vertically center items */
-}
-.ico-link {
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    padding: 5px;
-    width: 25px; /* Adjust as needed */
-    margin: 0 5px; /* Space between images */
-    display: inline-block; /* to prevent collapsing margins */
-}
-
-.ico-link:hover {
-    box-shadow: 0 0 2px 1px rgba(0, 140, 186, 0.5);
-}
-
-.ico-link img {
-    width: 100%; /* Make image fill container */
-    height: auto; /* Maintain aspect ratio */
-    display: block; /* Prevents small gap below image */
-}
-    </style>
+    <link rel="stylesheet" href="assets/css/app.css">
+    <link rel="icon" type="image/png" href="images/logo.png">
 </head>
 <body>
-<div class="ico-container">
-    <div class="ico-link">
-        <a href="welcome.php"><img src="/images/icons/home.png" alt="home"></a>
-    </div>
-    <div class="ico-link">
-        <a href="logout.php"><img src="/images/icons/logout.png" alt="logout"></a>
-    </div>
-</div>
-<h1 style="text-align: center; font-family: Arial; color: #333;">Evaluation System</h1>
+    <main class="app-shell">
+        <header class="topbar">
+            <div class="brand-block">
+                <div class="brand-mark"><img src="images/logo.png" alt="Logo"></div>
+                <div class="brand-copy">
+                    <h1>Evaluation Workspace</h1>
+                    <p>Performance review tools in a focused dashboard layout.</p>
+                </div>
+            </div>
+            <div class="toolbar-actions">
+                <a class="ghost-chip" href="welcome.php">Home</a>
+                <a class="ghost-chip" href="logout.php">Logout</a>
+            </div>
+        </header>
 
-    <div class="container">
-        <div class="image-link">
-            <a href="quarter_evaluation.php"><img src="\images\welcome\evaluation.png" alt="Quarter Evaluation"></a>
-            <p>Quarter Evaluation</p>
-        </div>
-        <div class="image-link">
-            <a href="quarter_report.php"><img src="\images\welcome\report.png" alt="Quarter Report"></a>
-            <p>Quarter Report</p>
-        </div>
-        <?php if ($username === 'admin') { ?>
-        <div class="image-link">
-            <a href="evaluation_cpanel.php"><img src="\images\welcome\cpanel.png" alt="Control Panel"></a>
-            <p>Control Panel</p>
-        </div>
-        <?php } ?>
-    </div>
+        <section class="hero-panel">
+            <div class="hero-copy">
+                <span class="hero-kicker">Performance module</span>
+                <h2>Move between quarterly reviews, annual reviews, and reports without the old icon grid.</h2>
+                <p>The updated interface makes the evaluation workflow feel like one coherent workspace instead of several disconnected pages.</p>
+                <div class="hero-actions">
+                    <a class="btn-primary" href="quarter_evaluation.php">Quarter Evaluation</a>
+                    <a class="btn-secondary" href="quarter_report.php">Quarter Report</a>
+                </div>
+            </div>
+            <aside class="hero-aside">
+                <article class="info-card">
+                    <strong><?php echo app_escape($currentModule['title'] ?? 'Evaluation'); ?></strong>
+                    <p><?php echo app_escape($currentModule['description'] ?? ''); ?></p>
+                </article>
+                <article class="info-card">
+                    <strong>Review cadence</strong>
+                    <p>Use the quarter and annual flows below while keeping your current backend logic unchanged.</p>
+                </article>
+            </aside>
+        </section>
+
+        <section class="content-panel">
+            <div class="section-head">
+                <div class="section-title">
+                    <h2>Quick Actions</h2>
+                    <p>Open the next evaluation task directly.</p>
+                </div>
+            </div>
+            <div class="quick-grid">
+                <a class="quick-card" href="quarter_evaluation.php"><strong>Quarter Evaluation</strong><p>Create or update quarterly employee scores.</p></a>
+                <a class="quick-card" href="quarter_report.php"><strong>Quarter Report</strong><p>Review filtered evaluation reports.</p></a>
+                <a class="quick-card" href="annual_evaluation.php"><strong>Annual Evaluation</strong><p>Work through yearly review records.</p></a>
+                <?php if (app_is_admin($username) && app_has_page_access($accessMap, 'evaluation_cpanel.php')): ?>
+                    <a class="quick-card" href="evaluation_cpanel.php"><strong>Control Panel</strong><p>Manage evaluation periods, employee sync, and rules.</p></a>
+                <?php endif; ?>
+            </div>
+        </section>
+    </main>
+<script src="assets/js/app.js"></script>
 </body>
 </html>
+

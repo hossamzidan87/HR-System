@@ -2,6 +2,7 @@
 include 'check_cookies.php';
 include 'db_connection.php';
 include 'page_access.php';
+include 'includes/app_helpers.php';
 
 $username = $_SESSION['username'];
 
@@ -48,6 +49,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['date']) && isset($_POS
         $departments_list = "'" . implode("','", array_unique($allowed_departments)) . "'";
     }
 }
+
+$show_charts = false;
+$chart_labels = [];
+$chart_ot_workers = [];
+$chart_total_workers = [];
+$chart_no_ot_workers = [];
 ?>
 
 <!DOCTYPE html>
@@ -94,30 +101,52 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['date']) && isset($_POS
             border-bottom: 2px solid #ddd;
         }
         td:hover {background-color: #f5f5f5;}
-.image-container { /* New container */
-    display: flex;
-    justify-content: flex-end; /* Align items to the right */
-    align-items: center; /* Vertically center items */
-}
-
-.image-link {
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    padding: 5px;
-    width: 25px; /* Adjust as needed */
-    margin: 0 5px; /* Space between images */
-    display: inline-block; /* to prevent collapsing margins */
-}
-
-.image-link:hover {
-    box-shadow: 0 0 2px 1px rgba(0, 140, 186, 0.5);
-}
-
-.image-link img {
-    width: 100%; /* Make image fill container */
-    height: auto; /* Maintain aspect ratio */
-    display: block; /* Prevents small gap below image */
-}
+        .side-by-side {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .side-by-side > div {
+            flex: 1;
+        }
+        .chart-board {
+            margin-top: 20px;
+            padding: 16px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #fff;
+        }
+        .chart-row {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .chart-row.split-60-40 {
+            grid-template-columns: 3fr 2fr;
+        }
+        .chart-card {
+            border: 1px solid #e3e3e3;
+            border-radius: 8px;
+            padding: 12px;
+            background: #fafafa;
+        }
+        .chart-card.full-width {
+            grid-column: 1 / -1;
+        }
+        .chart-card h3 {
+            margin: 0 0 12px;
+            font-size: 16px;
+        }
+        .chart-card canvas {
+            width: 100% !important;
+            height: 320px !important;
+        }
+        .chart-row .wide canvas {
+            height: 380px !important;
+        }
         @media print {
             button {
                 display: none;
@@ -132,40 +161,61 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['date']) && isset($_POS
             }
 
         }
+        @media (max-width: 980px) {
+            .chart-row {
+                grid-template-columns: 1fr;
+            }
+        }
 
     </style>
     <script>
-        function printTable() {
-            var printContents = document.getElementById('printArea');
+        function printSection(sectionId) {
+            var sourceSection = document.getElementById(sectionId);
+            var clonedSection = sourceSection.cloneNode(true);
+            var chartBoards = clonedSection.querySelectorAll('.chart-board');
+
+            chartBoards.forEach(function (chartBoard) {
+                chartBoard.remove();
+            });
+
+            var printContents = clonedSection.outerHTML;
             var printWindow = window.open('', '_blank');
             printWindow.document.open();
-            printWindow.document.write('<html><head><title>Print</title><style>');
-            printWindow.document.write('body { font-size: 9pt; }');
-            printWindow.document.write('</style></head><body>');
-            printWindow.document.write(printContents.innerHTML);
+            printWindow.document.write('<html><head><title>Print</title>');
+            // Add styles for printing
+            printWindow.document.write('<style>body{font-size:9pt} table{width:100%;margin:20px 0;border-collapse:collapse} thead{background-color:#4CAF50;color:white} th,td{padding:8px;text-align:center;border:1px solid #ddd} h2{text-align:center} .side-by-side{display:flex;justify-content:center;align-items:flex-start;gap:20px;} .side-by-side > div{flex:1;} </style>');
+            printWindow.document.write('</head><body>');
+            printWindow.document.write(printContents);
             printWindow.document.write('</body></html>');
             printWindow.document.close();
             printWindow.focus();
-            printWindow.print();
-            printWindow.close();
+            setTimeout(function () {
+                printWindow.print();
+                printWindow.close();
+            }, 500);
+        }
+
+        function printTable() {
+            printSection('printArea');
+        }
+
+        function printSummary() {
+            printSection('printSummaryArea');
         }
     </script>
+    <link rel="stylesheet" href="assets/css/app.css">
+    <link rel="icon" type="image/png" href="images/logo.png">
 </head>
 <body>
-    <div class="image-container">
-
-    <div class="image-link">
-        <a href="welcome.php"><img src="/images/icons/home.png" alt="home"></a>
-    </div>
-    <div class="image-link">
-        <a href="overtime_report.php"><img src="/images/icons/report.png" alt="home"></a>
-    </div>
-    <div class="image-link">
-        <a href="logout.php"><img src="/images/icons/logout.png" alt="logout"></a>
-    </div>
-</div>
-    <div class="container">
-        <h1>Daily Overtime Report</h1>
+<?php
+app_render_page_header('DR', 'Daily Overtime Report', 'View daily overtime data and generate reports.', [
+    ['label' => 'Home', 'href' => 'welcome.php'],
+    ['label' => 'Overtime Report', 'href' => 'overtime_report.php'],
+    ['label' => 'Logout', 'href' => 'logout.php'],
+]);
+app_render_page_hero('Report', 'Generate daily overtime reports.', 'Select a date and department to view the report.', []);
+app_open_content_panel('Daily Overtime', 'Configure report options below.');
+?>
         <form method="POST" id="dateDepartmentForm">
         <div class="form-group">
             <label for="date">Choose Date:</label>
@@ -210,9 +260,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['date']) && isset($_POS
                             END) AS total_hours
                         FROM overtime
                         WHERE overtime_date BETWEEN '$week_start' AND '$selected_date'
+                        AND types = 'normal'
                         GROUP BY employee_code
                     ) AS aggregated_overtime ON ot.employee_code = aggregated_overtime.employee_code
                     WHERE $where_clause
+                    AND ot.types = 'normal'
                     AND ot.overtime_date = '$selected_date'
                     GROUP BY ot.department,ot.employee_code, ot.bus_line_name";
 
@@ -249,10 +301,44 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['date']) && isset($_POS
                         $total_employees++;
                     }
 
+                    $departments_for_chart = ($selected_department == 'all') ? array_values(array_unique($allowed_departments)) : [$selected_department];
+                    $department_total_workers = [];
+
+                    if (!empty($departments_for_chart)) {
+                        $escaped_departments = array_map(static function ($department) use ($conn) {
+                            return $conn->real_escape_string($department);
+                        }, $departments_for_chart);
+                        $departments_for_chart_in = "'" . implode("','", $escaped_departments) . "'";
+
+                        $total_workers_sql = "SELECT department, COUNT(DISTINCT employee_code) AS total_workers
+                                              FROM employees
+                                              WHERE department IN ($departments_for_chart_in)
+                                              GROUP BY department";
+                        $total_workers_result = $conn->query($total_workers_sql);
+                        if ($total_workers_result) {
+                            while ($total_row = $total_workers_result->fetch_assoc()) {
+                                $department_total_workers[$total_row['department']] = (int) $total_row['total_workers'];
+                            }
+                        }
+
+                        foreach ($departments_for_chart as $department_name) {
+                            $ot_workers = (int) ($department_table[$department_name] ?? 0);
+                            $total_workers = (int) ($department_total_workers[$department_name] ?? 0);
+                            $no_ot_workers = max(0, $total_workers - $ot_workers);
+
+                            $chart_labels[] = $department_name;
+                            $chart_ot_workers[] = $ot_workers;
+                            $chart_total_workers[] = $total_workers;
+                            $chart_no_ot_workers[] = $no_ot_workers;
+                        }
+                    }
+
+                    $show_charts = !empty($chart_labels);
+
                     // Display Exceeded List
                     if (!empty($exceeded_list)) {
                         echo "<h2>Exceeded List</h2>";
-                        echo "<table border='1'>
+                        echo "<table>
                                 <thead>
                                     <tr>
                                         <th>Code</th>
@@ -277,11 +363,31 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['date']) && isset($_POS
                         echo "<h2>Empty Exceeded List</h2>";
                     }
 
+                    if ($show_charts) {
+                        echo '<div class="chart-board">';
+                        echo '<div class="chart-row split-60-40">';
+                        echo '<div class="chart-card wide">';
+                        echo '<h3>Overtime Analysis by Department</h3>';
+                        echo '<canvas id="dailyOvertimeStackedChart"></canvas>';
+                        echo '</div>';
+                        echo '<div class="chart-card">';
+                        echo '<h3>Total Distribution</h3>';
+                        echo '<canvas id="dailyOvertimePieChart"></canvas>';
+                        echo '</div>';
+                        echo '</div>';
+
+                        echo '</div>';
+                    }
+
+                    // Container for summary print content
+                    echo '<div id="printSummaryArea">';
+                    echo '<div class="side-by-side">';
+
                     // Display Department Table
                     if (!empty($department_table)) {
-                        echo"<table><tbody><tr></tr><th>";
+                        echo '<div>';
                         echo "<h2>Department Information</h2>";
-                        echo "<table border='1'>
+                        echo "<table>
                                 <thead>
                                     <tr>
                                         <th>Department</th>
@@ -295,13 +401,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['date']) && isset($_POS
                                     <td>$count</td>
                                   </tr>";
                         }
-                        echo "</tbody></table></th><th>";
+                        echo "</tbody></table></div>";
                     }
 
                     // Display Bus Line Table
                     if (!empty($bus_line_table)) {
+                        echo '<div>';
                         echo "<h2>Bus Line Information</h2>";
-                        echo "<table border='1'>
+                        echo "<table>
                                 <thead>
                                     <tr>
                                         <th>Bus Line</th>
@@ -315,16 +422,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['date']) && isset($_POS
                                     <td>$count</td>
                                   </tr>";
                         }
-                        echo "</tbody></table></th></tbody></table>";
+                        echo "</tbody></table></div>";
                     }
+                    echo '</div>'; // .side-by-side
+                    echo "<h2>Total Recorded Employees: $total_employees | Date: " . htmlspecialchars($selected_date) . "</h2>";
+                    echo '</div>'; // #printSummaryArea
 
-                    // Display Total Recorded Employees
-                    echo "<h2>Total Recorded Employees: $total_employees | Date: $selected_date</h2>";
-                    echo"</div></div><button class='button' onclick='printTable()'>Print</button>";
                     // Display All Employees
                     if (!empty($all_employees)) {
                         echo "<h2>All Recorded Employees</h2>";
-                        echo "<table border='1'>
+                        echo "<table>
                                 <thead>
                                     <tr>
                                         <th>Code</th>
@@ -348,12 +455,99 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['date']) && isset($_POS
                         }
                         echo "</tbody></table>";
                     }
+
                 } else {
                     echo "<h2>No records found for the selected date and department.</h2>";
                 }
+            } ?>
+        </div>
+        <?php
+            // Show print button only if there is a report generated
+            if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($combined_result) && $combined_result->num_rows > 0) {
+                echo "<button class='button' onclick='printSummary()'>Print Summary</button>\n";
+                echo "<button class='button' onclick='printTable()'>Print Full Report</button>";
             }
-            ?>
+        ?>
 
-    
+<?php
+app_close_content_panel();
+app_render_page_end();
+?>
+<?php if ($_SERVER['REQUEST_METHOD'] == 'POST' && $show_charts): ?>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script>
+    (function () {
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js failed to load. Check internet/CDN access.');
+            return;
+        }
+
+        const labels = <?php echo json_encode($chart_labels); ?>;
+        const otWorkers = <?php echo json_encode($chart_ot_workers); ?>;
+        const totalWorkers = <?php echo json_encode($chart_total_workers); ?>;
+        const noOtWorkers = <?php echo json_encode($chart_no_ot_workers); ?>;
+
+        const totalOtWorkers = otWorkers.reduce((sum, value) => sum + value, 0);
+        const totalNoOtWorkers = noOtWorkers.reduce((sum, value) => sum + value, 0);
+
+        const stackedCtx = document.getElementById('dailyOvertimeStackedChart');
+        if (stackedCtx) {
+            new Chart(stackedCtx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [
+                        { label: 'Non OT', data: noOtWorkers, backgroundColor: '#1f77b4' },
+                        { label: 'OT Workers', data: otWorkers, backgroundColor: '#8bc53f' },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } },
+                    scales: {
+                        x: { stacked: true, ticks: { maxRotation: 70, minRotation: 45 } },
+                        y: { stacked: true, beginAtZero: true },
+                    },
+                },
+            });
+        }
+
+        const pieCtx = document.getElementById('dailyOvertimePieChart');
+        if (pieCtx) {
+            new Chart(pieCtx, {
+                type: 'pie',
+                data: {
+                    labels: ['Non OT', 'OT Workers'],
+                    datasets: [{
+                        data: [totalNoOtWorkers, totalOtWorkers],
+                        backgroundColor: ['#1f77b4', '#8bc53f'],
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top' },
+                        datalabels: {
+                            formatter: function (value, ctx) {
+                                var total = ctx.dataset.data.reduce(function (a, b) { return a + b; }, 0);
+                                if (total === 0 || value === 0) return '';
+                                return (value / total * 100).toFixed(1) + '%';
+                            },
+                            color: '#fff',
+                            font: { weight: 'bold', size: 13 },
+                        },
+                    },
+                },
+                plugins: [ChartDataLabels],
+            });
+        }
+
+    })();
+</script>
+<?php endif; ?>
+<script src="assets/js/app.js"></script>
 </body>
 </html>

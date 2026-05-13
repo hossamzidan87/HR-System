@@ -1,6 +1,8 @@
 <?php
 include 'check_cookies.php';
 include 'db_connection.php';
+include 'page_access.php';
+include 'includes/app_helpers.php';
 
 if (!isset($_SESSION['username'])) {
     die("Unauthorized access. Please log in.");
@@ -95,13 +97,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if ($selected_department === 'all') {
         $overtime_sql = "SELECT employee_code, employee_name, department, job, overtime_date 
                          FROM overtime 
-                         WHERE department IN ('" . implode("','", $allowed_departments) . "') AND overtime_date BETWEEN ? AND ?";
+                         WHERE types = 'normal'
+                         AND department IN ('" . implode("','", $allowed_departments) . "') AND overtime_date BETWEEN ? AND ?";
         $stmt = $conn->prepare($overtime_sql);
         $stmt->bind_param("ss", $start_of_week, $end_of_week);
     } else {
         $overtime_sql = "SELECT employee_code, employee_name, department, job, overtime_date 
                          FROM overtime 
-                         WHERE department = ? AND overtime_date BETWEEN ? AND ?";
+                         WHERE types = 'normal'
+                         AND department = ? AND overtime_date BETWEEN ? AND ?";
         $stmt = $conn->prepare($overtime_sql);
         $stmt->bind_param("sss", $selected_department, $start_of_week, $end_of_week);
     }
@@ -202,7 +206,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $daily_submission_count_selected = [];
     $daily_submission_sql = "SELECT department, overtime_date, COUNT(DISTINCT employee_code) as submission_count 
                              FROM overtime 
-                             WHERE (department = ? OR ? = 'all') AND overtime_date BETWEEN ? AND ? 
+                             WHERE types = 'normal' 
+                             AND (department = ? OR ? = 'all') AND overtime_date BETWEEN ? AND ? 
                              GROUP BY department, overtime_date";
     $stmt = $conn->prepare($daily_submission_sql);
     $stmt->bind_param("ssss", $selected_department, $selected_department, $start_of_week, $end_of_week);
@@ -214,6 +219,45 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
     $stmt->close();
+}
+
+$chart_labels = [];
+$chart_no_overtime = [];
+$chart_0_10 = [];
+$chart_10_12 = [];
+$chart_more_12 = [];
+$chart_ot_workers = [];
+$chart_total_employees = [];
+$chart_day_labels = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+$chart_day_submissions = [];
+$chart_day_remaining = [];
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    foreach ($department_summary as $summary) {
+        $chart_labels[] = $summary['department'];
+        $chart_no_overtime[] = (int) $summary['no_overtime'];
+        $chart_0_10[] = (int) $summary['less_than_10'];
+        $chart_10_12[] = (int) $summary['between_10_and_12'];
+        $chart_more_12[] = (int) $summary['more_than_12'];
+        $chart_ot_workers[] = (int) ($summary['less_than_10'] + $summary['between_10_and_12'] + $summary['more_than_12']);
+        $chart_total_employees[] = (int) $summary['total_employees'];
+    }
+
+    $chart_total_factory = array_sum($chart_total_employees);
+
+    foreach ($chart_day_labels as $day) {
+        $date = date('Y-m-d', strtotime($day, strtotime($start_of_week)));
+        $submitted = 0;
+
+        foreach ($daily_submission_count_selected as $department => $dates) {
+            if (in_array($department, $allowed_departments, true) && isset($dates[$date])) {
+                $submitted += (int) $dates[$date];
+            }
+        }
+
+        $chart_day_submissions[] = $submitted;
+        $chart_day_remaining[] = max(0, $chart_total_factory - $submitted);
+    }
 }
 
 // Define the start date (Saturday, 7th December 2024)
@@ -245,48 +289,84 @@ $start_date = strtotime('2024-12-07');
         th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
         th { background-color: #4CAF50; color: white; }
         tr:hover { background-color: #f5f5f5; }
-
-        .image-container { /* New container */
-    display: flex;
-    justify-content: flex-end; /* Align items to the right */
-    align-items: center; /* Vertically center items */
-}
-
-.image-link {
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    padding: 5px;
-    width: 25px; /* Adjust as needed */
-    margin: 0 5px; /* Space between images */
-    display: inline-block; /* to prevent collapsing margins */
-}
-
-.image-link:hover {
-    box-shadow: 0 0 2px 1px rgba(0, 140, 186, 0.5);
-}
-
-.image-link img {
-    width: 100%; /* Make image fill container */
-    height: auto; /* Maintain aspect ratio */
-    display: block; /* Prevents small gap below image */
-}
+        .chart-board {
+            margin-top: 20px;
+            padding: 16px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #fff;
+        }
+        .chart-row {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .chart-row.split-60-40 {
+            grid-template-columns: 3fr 2fr;
+        }
+        .chart-card {
+            border: 1px solid #e3e3e3;
+            border-radius: 8px;
+            padding: 12px;
+            background: #fafafa;
+        }
+        .chart-card.full-width {
+            grid-column: 1 / -1;
+        }
+        .chart-card h3 {
+            margin: 0 0 12px;
+            font-size: 16px;
+        }
+        .chart-card canvas {
+            width: 100% !important;
+            height: 320px !important;
+        }
+        .chart-row .wide canvas {
+            height: 380px !important;
+        }
+        .day-charts {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(140px, 1fr));
+            gap: 10px;
+        }
+        .day-chart-card {
+            border: 1px solid #e3e3e3;
+            border-radius: 8px;
+            padding: 8px;
+            text-align: center;
+            background: #fafafa;
+        }
+        .day-chart-card h4 {
+            margin: 0 0 8px;
+            font-size: 13px;
+        }
+        .day-chart-card canvas {
+            width: 100% !important;
+            height: 180px !important;
+        }
+        @media (max-width: 980px) {
+            .chart-row {
+                grid-template-columns: 1fr;
+            }
+            .day-charts {
+                grid-template-columns: repeat(2, minmax(140px, 1fr));
+            }
+        }
     </style>
+    <link rel="stylesheet" href="assets/css/app.css">
+    <link rel="icon" type="image/png" href="images/logo.png">
 </head>
 <body>
-        <div class="image-container">
-    <div class="image-link">
-        <a href="welcome.php"><img src="/images/icons/home.png" alt="home"></a>
-    </div>
-        <div class="image-link">
-        <a href="overtime_report.php"><img src="/images/icons/report.png" alt="home"></a>
-    </div>
-    <div class="image-link">
-        <a href="logout.php"><img src="/images/icons/logout.png" alt="logout"></a>
-    </div>
-    </div>
-
-    <div class="container">
-        <h1>Weekly Overtime Report</h1>
+<?php
+app_render_page_header('WR', 'Weekly Overtime Report', 'View weekly overtime data and generate reports.', [
+    ['label' => 'Home', 'href' => 'welcome.php'],
+    ['label' => 'Overtime Report', 'href' => 'overtime_report.php'],
+    ['label' => 'Logout', 'href' => 'logout.php'],
+]);
+app_render_page_hero('Report', 'Generate weekly overtime reports.', 'Select a week and department to view the report.', []);
+app_open_content_panel('Weekly Overtime', 'Configure report options below.');
+?>
         <form method="POST" action="weekly_overtime.php">
 
             <div class="form-group">
@@ -323,8 +403,9 @@ for ($i = 0; $i < $weeks_count; $i++) {
         </form>
 
         <?php if ($_SERVER['REQUEST_METHOD'] == 'POST'): ?>
+            <h2><p><strong>Selected Week:</strong> <?php echo htmlspecialchars($start_of_week . ' to ' . $end_of_week); ?></p></h2>
             <h2>Exceeded List</h2>
-            <table border="1">
+            <table>
                 <thead>
                     <tr>
                         <th>Employee Code</th>
@@ -347,8 +428,39 @@ for ($i = 0; $i < $weeks_count; $i++) {
                 </tbody>
             </table>
 
+            <div class="chart-board">
+                <div class="chart-row split-60-40">
+                    <div class="chart-card wide">
+                        <h3>Overtime Analysis by Department</h3>
+                        <canvas id="overtimeStackedChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Total Distribution</h3>
+                        <canvas id="overtimePieChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-row">
+                    <div class="chart-card wide full-width">
+                        <h3>Workers Overtime vs Total Workers</h3>
+                        <canvas id="workersComparisonChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="day-charts">
+                    <div class="day-chart-card"><h4>Saturday</h4><canvas id="dayChart0"></canvas></div>
+                    <div class="day-chart-card"><h4>Sunday</h4><canvas id="dayChart1"></canvas></div>
+                    <div class="day-chart-card"><h4>Monday</h4><canvas id="dayChart2"></canvas></div>
+                    <div class="day-chart-card"><h4>Tuesday</h4><canvas id="dayChart3"></canvas></div>
+                    <div class="day-chart-card"><h4>Wednesday</h4><canvas id="dayChart4"></canvas></div>
+                    <div class="day-chart-card"><h4>Thursday</h4><canvas id="dayChart5"></canvas></div>
+                    <div class="day-chart-card"><h4>Friday</h4><canvas id="dayChart6"></canvas></div>
+                </div>
+            </div>
+
+
             <h2>Department Summary</h2>
-            <table border="1">
+            <table>
                 <thead>
                     <tr>
                         <th>Department</th>
@@ -402,7 +514,7 @@ for ($i = 0; $i < $weeks_count; $i++) {
                 </tfoot>
             </table>
             <h2>Daily Total Submission Overtime hours for Selected Week</h2>
-            <table border="1">
+            <table>
                 <thead>
                     <tr>
                         <?php
@@ -443,7 +555,7 @@ for ($i = 0; $i < $weeks_count; $i++) {
             </table>
 
             <h2>Daily Submission Count for Selected Week and Department</h2>
-            <table border="1">
+            <table>
                 <thead>
                     <tr>
                         <th>Department</th>
@@ -500,6 +612,149 @@ for ($i = 0; $i < $weeks_count; $i++) {
                 </tfoot>
             </table>
         <?php endif; ?>
-    </div>
+<?php
+app_close_content_panel();
+app_render_page_end();
+?>
+<?php if ($_SERVER['REQUEST_METHOD'] == 'POST'): ?>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script>
+    (function () {
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js failed to load. Check internet/CDN access.');
+            return;
+        }
+
+        const labels = <?php echo json_encode($chart_labels); ?>;
+        const noOt = <?php echo json_encode($chart_no_overtime); ?>;
+        const hours0to10 = <?php echo json_encode($chart_0_10); ?>;
+        const hours10to12 = <?php echo json_encode($chart_10_12); ?>;
+        const moreThan12 = <?php echo json_encode($chart_more_12); ?>;
+        const otWorkers = <?php echo json_encode($chart_ot_workers); ?>;
+        const totalWorkers = <?php echo json_encode($chart_total_employees); ?>;
+        const dayLabels = <?php echo json_encode($chart_day_labels); ?>;
+        const daySubmitted = <?php echo json_encode($chart_day_submissions); ?>;
+        const dayRemaining = <?php echo json_encode($chart_day_remaining); ?>;
+
+        const totalNoOt = noOt.reduce((sum, value) => sum + value, 0);
+        const total0to10 = hours0to10.reduce((sum, value) => sum + value, 0);
+        const total10to12 = hours10to12.reduce((sum, value) => sum + value, 0);
+        const totalMore12 = moreThan12.reduce((sum, value) => sum + value, 0);
+
+        const stackedCtx = document.getElementById('overtimeStackedChart');
+        if (stackedCtx) {
+            new Chart(stackedCtx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [
+                        { label: 'Non OT', data: noOt, backgroundColor: '#1f77b4' },
+                        { label: '0-10 Hr', data: hours0to10, backgroundColor: '#b7d69a' },
+                        { label: '10-12 Hr', data: hours10to12, backgroundColor: '#8bc53f' },
+                        { label: 'More Than 12 Hr', data: moreThan12, backgroundColor: '#d9534f' },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } },
+                    scales: {
+                        x: { stacked: true, ticks: { maxRotation: 70, minRotation: 45 } },
+                        y: { stacked: true, beginAtZero: true },
+                    },
+                },
+            });
+        }
+
+        const pieCtx = document.getElementById('overtimePieChart');
+        if (pieCtx) {
+            new Chart(pieCtx, {
+                type: 'pie',
+                data: {
+                    labels: ['Non OT', '0-10 Hr', '10-12 Hr', 'More Than 12 Hr'],
+                    datasets: [{
+                        data: [totalNoOt, total0to10, total10to12, totalMore12],
+                        backgroundColor: ['#1f77b4', '#b7d69a', '#8bc53f', '#d9534f'],
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top' },
+                        datalabels: {
+                            formatter: function (value, ctx) {
+                                var total = ctx.dataset.data.reduce(function (a, b) { return a + b; }, 0);
+                                if (total === 0 || value === 0) return '';
+                                return (value / total * 100).toFixed(1) + '%';
+                            },
+                            color: '#fff',
+                            font: { weight: 'bold', size: 13 },
+                        },
+                    },
+                },
+                plugins: [ChartDataLabels],
+            });
+        }
+
+        const compareCtx = document.getElementById('workersComparisonChart');
+        if (compareCtx) {
+            new Chart(compareCtx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [
+                        { label: 'Total OT Workers', data: otWorkers, backgroundColor: '#88c26a' },
+                        { label: 'Total Factory', data: totalWorkers, backgroundColor: '#2f7fd0' },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } },
+                    scales: {
+                        x: { ticks: { maxRotation: 70, minRotation: 45 } },
+                        y: { beginAtZero: true },
+                    },
+                },
+            });
+        }
+
+        dayLabels.forEach((day, index) => {
+            const dayCtx = document.getElementById(`dayChart${index}`);
+            if (!dayCtx) return;
+            new Chart(dayCtx, {
+                type: 'pie',
+                data: {
+                    labels: [day + ' Submitted', 'Remaining Factory'],
+                    datasets: [{
+                        data: [daySubmitted[index] || 0, dayRemaining[index] || 0],
+                        backgroundColor: ['#88c26a', '#2f7fd0'],
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 10 } },
+                        datalabels: {
+                            formatter: function (value, ctx) {
+                                var total = ctx.dataset.data.reduce(function (a, b) { return a + b; }, 0);
+                                if (total === 0 || value === 0) return '';
+                                return (value / total * 100).toFixed(1) + '%';
+                            },
+                            color: '#fff',
+                            font: { weight: 'bold', size: 11 },
+                        },
+                    },
+                },
+                plugins: [ChartDataLabels],
+            });
+        });
+    })();
+</script>
+<?php endif; ?>
+<script src="assets/js/app.js"></script>
 </body>
 </html>

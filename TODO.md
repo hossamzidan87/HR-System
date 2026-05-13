@@ -1,0 +1,3 @@
+- [x] Update `api/dashboard_summary.php` to compute overtime today counts for both `normal` and `night` types
+- [x] Update `summaryCards` "Overtime Today" value to one-line format: `Normal: X | Night: Y`
+- [x] Mark tasks complete after code update

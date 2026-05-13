@@ -2,8 +2,8 @@
 include 'check_cookies.php';
 include 'db_connection.php';
 include 'page_access.php';
+include 'includes/app_helpers.php';
 
-// Fetch user permissions
 $username = $_SESSION['username'];
 $permissions_sql = "SELECT group_name_1, group_name_2, group_name_3 FROM user_permissions WHERE username='$username'";
 $permissions_result = $conn->query($permissions_sql);
@@ -15,11 +15,9 @@ if ($permissions_result->num_rows > 0) {
     if ($user_permissions['group_name_3']) $user_groups[] = $user_permissions['group_name_3'];
 }
 
-// Fetch departments based on user groups
 $allowed_departments = [];
 $departments_array = [];
-$departments_sql = "";
-
+$departments_list = "''";
 if (!empty($user_groups)) {
     $groups_in = "'" . implode("','", $user_groups) . "'";
     $departments_sql = "SELECT DISTINCT department FROM department_groups WHERE group_name IN ($groups_in) OR group_name1 IN ($groups_in) OR group_name2 IN ($groups_in)";
@@ -30,10 +28,11 @@ if (!empty($user_groups)) {
             $departments_array[] = $row['department'];
         }
     }
-    $departments_list = "'" . implode("','", $departments_array) . "'";
+    if (!empty($departments_array)) {
+        $departments_list = "'" . implode("','", $departments_array) . "'";
+    }
 }
 
-// Fetch opening and closing times
 $rule_sql = "SELECT sadv_start, sadv_end FROM rules WHERE name = 'close_time'";
 $rule_result = $conn->query($rule_sql);
 $rule = $rule_result->fetch_assoc();
@@ -42,9 +41,70 @@ $sadv_end = $rule['sadv_end'];
 $current_time = date('Y-m-d H:i:s');
 
 if ($current_time < $sadv_start || $current_time > $sadv_end) {
-    echo "<h3>This page is currently closed and usually opens on the 17th of every month.</h3>";
-    echo "<a href='welcome.php'><img width='50' height='50' src='/images/icons/home.png' alt='home'></a>";
-    exit;
+    app_render_state_page(
+        'SA',
+        'Salary Advance List',
+        'Department-based salary advance sheets with a cleaner print workflow.',
+        'Salary Advance Window',
+        'Salary Advance Page Closed',
+        'This page is currently closed and usually opens on the 17th of every month.',
+        [
+            ['label' => 'Home', 'href' => 'welcome.php'],
+            ['label' => 'Salary Advance', 'href' => 'sadv_list.php'],
+            ['label' => 'Logout', 'href' => 'logout.php'],
+        ],
+        [
+            ['title' => 'Window Start', 'text' => $sadv_start],
+            ['title' => 'Window End', 'text' => $sadv_end],
+        ],
+        [
+            ['label' => 'Back To Dashboard', 'href' => 'welcome.php'],
+            ['label' => 'Refresh Page', 'href' => 'sadv_list.php'],
+        ],
+        'Workspace Status',
+        'The salary advance workspace is currently unavailable, but the rest of the module remains accessible.'
+    );
+}
+
+function getEmployeesByDepartment($conn, $department, $departments_list) {
+    $sql = ($department === 'all')
+        ? "SELECT employee_code, first_name, department, job FROM employees WHERE department IN ($departments_list) ORDER BY department, employee_code"
+        : "SELECT employee_code, first_name, department, job FROM employees WHERE department = ? ORDER BY employee_code";
+    $stmt = $conn->prepare($sql);
+    if ($department !== 'all') {
+        $stmt->bind_param("s", $department);
+    }
+    $stmt->execute();
+    return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+}
+
+function renderEmployeeTable($employees, $selected_department) {
+    echo "<div id='printArea' class='stack-gap'>";
+    echo "<div class='summary-card'><strong>Department</strong><p>" . htmlspecialchars($selected_department) . " - Month: " . date('F') . "</p></div>";
+    echo "<div class='table-scroll'><table border='1'>";
+    echo "<thead><tr><th>Code</th><th>Name</th><th>Department</th><th>Job Description</th><th>Salary ADV</th><th>Employee Signature</th></tr></thead><tbody>";
+
+    foreach ($employees as $row) {
+        echo "<tr>";
+        echo "<td>" . htmlspecialchars($row['employee_code']) . "</td>";
+        echo "<td>" . htmlspecialchars($row['first_name']) . "</td>";
+        echo "<td>" . htmlspecialchars($row['department']) . "</td>";
+        echo "<td>" . htmlspecialchars($row['job']) . "</td>";
+        echo "<td></td><td></td>";
+        echo "</tr>";
+    }
+
+    echo "</tbody></table></div>";
+    echo "<div class='summary-card'><strong>Manager Approval</strong><p>....................................................</p></div>";
+    echo "</div>";
+}
+
+$selected_department = $_GET['department'] ?? '';
+$employees = [];
+$show_table = false;
+if ($selected_department !== '' && (in_array($selected_department, $allowed_departments, true) || $selected_department === 'all')) {
+    $employees = getEmployeesByDepartment($conn, $selected_department, $departments_list);
+    $show_table = true;
 }
 ?>
 <!DOCTYPE html>
@@ -53,40 +113,20 @@ if ($current_time < $sadv_start || $current_time > $sadv_end) {
     <title>Salary Advance List</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        .exceeded { background-color: #ffcccc; }
-        table { width: 80%; margin: 0 auto; border-collapse: collapse; }
-        th { background-color: #4CAF50; color: white; text-align: left; padding: 5px; }
-        td { padding: 5px; text-align: left; border-bottom: 1px solid #ddd; }
-        tr:hover { background-color: #f5f5f5; }
-        .header, .footer { background-color: #f2f2f2; text-align: center; padding: 10px; }
-        button { background-color: #04AA6D; border: none; color: white; padding: 15px 32px; text-align: center; text-decoration: none; display: inline-block; font-size: 16px; margin: 4px 2px; cursor: pointer; transition-duration: 0.4s; }
-        button:hover { box-shadow: 0 12px 16px 0 rgba(0,0,0,0.24),0 17px 50px 0 rgba(0,0,0,0.19); }
-        select { background-color: #04AA6D; height: 30px; border-color: #fff; color: white; }
-        .image-container { display: flex; justify-content: flex-end; align-items: center; }
-        .image-link { border: 1px solid #ddd; border-radius: 4px; padding: 5px; width: 25px; margin: 0 5px; }
-        .image-link:hover { box-shadow: 0 0 2px 1px rgba(0, 140, 186, 0.5); }
-        .image-link img { width: 100%; height: auto; display: block; }
-        @media print { button, .header, .footer { display: none; } }
-    </style>
+    <link rel="stylesheet" href="assets/css/app.css">
+    <link rel="icon" type="image/png" href="images/logo.png">
     <script>
         function showEmployees() {
-            var department = document.getElementById("department").value;
-            var form = document.getElementById("employeeForm");
-            form.action = "sadv_list.php?department=" + department;
-            form.submit();
+            var department = document.getElementById('department').value;
+            window.location.href = 'sadv_list.php?department=' + encodeURIComponent(department);
         }
 
         function printTable() {
-            var printContents = document.getElementById('printArea');
+            var printContents = document.getElementById('printArea').innerHTML;
             var printWindow = window.open('', '_blank');
             printWindow.document.open();
-            printWindow.document.write('<html><head><title>Print</title><style>');
-            printWindow.document.write('body { font-size: 9pt; }');
-            printWindow.document.write('table { width: 100%; border-collapse: collapse; }');
-            printWindow.document.write('th, td { padding-top: 5px; padding-bottom: 5px; font-size: 8pt; border: 1px solid black; white-space: nowrap; }');
-            printWindow.document.write('</style></head><body>');
-            printWindow.document.write(printContents.innerHTML);
+            printWindow.document.write('<html><head><title>Print</title><style>body{font-size:9pt;font-family:Arial,sans-serif;}table{width:100%;border-collapse:collapse;}th,td{padding-top:5px;padding-bottom:5px;font-size:8pt;border:1px solid black;white-space:nowrap;}th{background:#8f1a1e;color:#fff;}</style></head><body>');
+            printWindow.document.write(printContents);
             printWindow.document.write('</body></html>');
             printWindow.document.close();
             printWindow.focus();
@@ -96,86 +136,42 @@ if ($current_time < $sadv_start || $current_time > $sadv_end) {
     </script>
 </head>
 <body>
-    <div class="image-container">
-        <div class="image-link">
-            <a href="welcome.php"><img src="/images/icons/home.png" alt="home"></a>
-        </div>
-        <div class="image-link">
-            <a href="logout.php"><img src="/images/icons/logout.png" alt="logout"></a>
-        </div>
-    </div>
-    <h2>Salary Advance List</h2>
-    <form id="employeeForm" method="POST" action="sadv_list.php">
-        <label for="department">Choose Department:</label>
+<?php
+app_render_page_header('SA', 'Salary Advance List', 'Department-based salary advance sheets with a cleaner print workflow.', [
+    ['label' => 'Home', 'href' => 'welcome.php'],
+    ['label' => 'Salary Advance', 'href' => 'sadv_list.php'],
+    ['label' => 'Logout', 'href' => 'logout.php'],
+]);
+app_render_page_hero('Second-level page', 'The salary advance list now uses the same inner shell as the rest of the revamp.', 'Filter by department, view the printable sheet, and print directly from a cleaner responsive page layout.', [
+    ['title' => 'Window Start', 'text' => $sadv_start],
+    ['title' => 'Window End', 'text' => $sadv_end],
+]);
+app_open_content_panel('Generate Salary Advance Sheet', 'Choose one department or all accessible departments to prepare the printable list.');
+?>
+<form id="employeeForm" method="GET" action="sadv_list.php">
+    <div class="form-row">
+        <label for="department">Department</label>
         <select id="department" name="department" onchange="showEmployees()">
             <option value="">Select a department</option>
-            <option value="all">All Departments</option>
-            <?php
-            foreach ($allowed_departments as $department) {
-                echo "<option value='" . htmlspecialchars($department) . "'>" . htmlspecialchars($department) . "</option>";
-            }
-            ?>
+            <option value="all" <?php echo $selected_department === 'all' ? 'selected' : ''; ?>>All Departments</option>
+            <?php foreach ($allowed_departments as $department): ?>
+                <option value="<?php echo htmlspecialchars($department); ?>" <?php echo $selected_department === $department ? 'selected' : ''; ?>><?php echo htmlspecialchars($department); ?></option>
+            <?php endforeach; ?>
         </select>
-    </form>
-
+    </div>
+</form>
+<?php if ($show_table): ?>
+    <div class="panel-actions"><button type="button" onclick="printTable()">Print</button></div>
+    <?php renderEmployeeTable($employees, $selected_department); ?>
+<?php else: ?>
+    <div class="message-card">Please select a department from the list above.</div>
+<?php endif; ?>
 <?php
-// Fetch employees based on selected department
-function getEmployeesByDepartment($conn, $department, $departments_list) {
-    $sql = ($department === 'all') ? 
-        "SELECT employee_code, first_name, department, job FROM employees WHERE department IN ($departments_list) ORDER BY department, employee_code" :
-        "SELECT employee_code, first_name, department, job FROM employees WHERE department = ? ORDER BY employee_code";
-    $stmt = $conn->prepare($sql);
-    if ($department !== 'all') $stmt->bind_param("s", $department);
-    $stmt->execute();
-    return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-}
-
-// Display employee table
-function displayEmployeeTable($employees, $selected_department) {
-    echo "<div id='printArea'>";
-    echo "<h3 id='departmentHeadline' align='center'>Selected Department: " . htmlspecialchars($selected_department) . " - Month : " . date('F') . "</h3>";
-    echo "<table border='1'>";
-    echo "<thead><tr>
-            <th>Code</th>
-            <th>Name</th>
-            <th>Department</th>
-            <th>Job Description</th>
-            <th>Salary ADV</th>
-            <th>Employee Signature</th>
-          </tr></thead>";
-    echo "<tbody>";
-
-    foreach ($employees as $row) {
-        $employee_code = $row['employee_code'];
-        $employee_name = $row['first_name'];
-        $department = $row['department'];
-        $job = $row['job'];
-
-        echo "<tr>";
-        echo "<td>" . htmlspecialchars($employee_code) . "</td>";
-        echo "<td>" . htmlspecialchars($employee_name) . "</td>";
-        echo "<td>" . htmlspecialchars($department) . "</td>";
-        echo "<td>" . htmlspecialchars($job) . "</td>";
-        echo "<td></td>";  // Sadv empty
-        echo "<td></td>";  // Signature empty
-        echo "</tr>";
-    }
-
-    echo "</tbody></table>";
-    echo "<h3>Manager Approval</h3>";
-    echo "<p>....................................................</p>";
-    echo "</div>";
-    echo "<button onclick='printTable()'>Print</button>";
-}
-
-// Main logic
-if (isset($_GET['department']) && (in_array($_GET['department'], $allowed_departments) || $_GET['department'] === 'all')) {
-    $selected_department = $_GET['department'];
-    $employees = getEmployeesByDepartment($conn, $selected_department, $departments_list);
-    displayEmployeeTable($employees, $selected_department);
-} else {
-    echo "<h3>Please select a department from the list above.</h3>";
-}
+app_close_content_panel();
+app_render_page_end();
 ?>
-    </body>
+<script src="assets/js/app.js"></script>
+</body>
 </html>
+
+

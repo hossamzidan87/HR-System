@@ -4,7 +4,7 @@ include 'db_connection.php';
 if (isset($_GET['date'])) {
     $selected_date = $_GET['date'];
 
-    $employees_sql = "SELECT employee_code, employee_name, bus_line_name, department, job, processed_by, processed_at FROM overtime WHERE overtime_date = '$selected_date'";
+    $employees_sql = "SELECT employee_code, employee_name, bus_line_name, department, job, processed_by, processed_at FROM overtime WHERE overtime_date = '$selected_date' AND types = 'normal'";
     $employees_result = $conn->query($employees_sql);
 
     if ($employees_result->num_rows > 0) {

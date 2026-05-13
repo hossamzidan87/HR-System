@@ -2,181 +2,93 @@
 session_start();
 
 if (isset($_COOKIE['remember_me'])) {
-
-    
-    // You can add additional checks here if needed
-    // Redirect to the login page if cookies are not set
     header("Location: welcome.php");
-    exit(); // Ensure the script stops executing after redirection
-    // Redirect to the welcome page
-
-} else {
-
+    exit();
 }
+
+$loginError = isset($_GET['error']) ? trim($_GET['error']) : '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- Design by foolishdeveloper.com -->
     <title>Rubyred Fetih HR Management System</title>
- 
-    <link rel="preconnect" href="https://fonts.gstatic.com">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;600&display=swap" rel="stylesheet">
-    <!--Stylesheet-->
-    <style media="screen">
-      *,
-*:before,
-*:after{
-    padding: 0;
-    margin: 0;
-    box-sizing: border-box;
-}
-body{
-    background-color:rgb(172, 20, 20);
-}
-.background{
-    width: 430px;
-    height: 520px;
-    position: absolute;
-    transform: translate(-50%,-50%);
-    left: 50%;
-    top: 50%;
-}
-.background .shape{
-    height: 200px;
-    width: 200px;
-    position: absolute;
-    border-radius: 50%;
-}
-.shape:first-child{
-    background: linear-gradient(
-        #1845ad,
-        #23a2f6
-    );
-    left: -80px;
-    top: -80px;
-}
-.shape:last-child{
-    background: linear-gradient(
-        to right,
-        #ff512f,
-        #f09819
-    );
-    right: -30px;
-    bottom: -80px;
-}
-form{
-    height: 520px;
-    width: 400px;
-    background-color: rgba(255,255,255,0.13);
-    position: absolute;
-    transform: translate(-50%,-50%);
-    top: 50%;
-    left: 50%;
-    border-radius: 10px;
-    backdrop-filter: blur(10px);
-    border: 2px solid rgba(255,255,255,0.1);
-    box-shadow: 0 0 40px rgba(8,7,16,0.6);
-    padding: 50px 35px;
-}
-form *{
-    font-family: 'Poppins',sans-serif;
-    color: #ffffff;
-    letter-spacing: 0.5px;
-    outline: none;
-    border: none;
-}
-form h3{
-    font-size: 32px;
-    font-weight: 500;
-    line-height: 42px;
-    text-align: center;
-}
-
-label{
-    display: block;
-    margin-top: 30px;
-    font-size: 16px;
-    font-weight: 500;
-}
-input{
-    display: block;
-    height: 50px;
-    width: 100%;
-    background-color: rgba(255,255,255,0.07);
-    border-radius: 3px;
-    padding: 0 10px;
-    margin-top: 8px;
-    font-size: 14px;
-    font-weight: 300;
-}
-::placeholder{
-    color: #e5e5e5;
-}
-button{
-    margin-top: 50px;
-    width: 100%;
-    background-color: #ffffff;
-    color: #080710;
-    padding: 15px 0;
-    font-size: 18px;
-    font-weight: 600;
-    border-radius: 5px;
-    cursor: pointer;
-}
-.social{
-  margin-top: 30px;
-  display: flex;
-}
-.social div{
-  background: red;
-  width: 150px;
-  border-radius: 3px;
-  padding: 5px 10px 10px 5px;
-  background-color: rgba(255,255,255,0.27);
-  color: #eaf0fb;
-  text-align: center;
-}
-.social div:hover{
-  background-color: rgba(255,255,255,0.47);
-}
-.social .fb{
-  margin-left: 25px;
-}
-.social i{
-  margin-right: 4px;
-}
-
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="assets/css/app.css">
+    <link rel="icon" type="image/png" href="images/logo.png">
 </head>
 <body>
-    <div class="background">
-        <div class="shape"></div>
-        <div class="shape"></div>
-    </div>
-    <form action="login.php" method="post" onsubmit="return validateForm()">
-        <h3>Login Here</h3>
+    <main class="auth-shell">
+        <section class="auth-panel">
+            <div class="auth-hero">
+                <div class="brand-block">
+                    <div class="brand-mark"><img src="images/logo.png" alt="Logo"></div>
+                    <div class="brand-copy">
+                        <h1>Rubyred Fetih</h1>
+                        <p>HR operations dashboard for overtime, shifts, evaluations, and salary advance workflows.</p>
+                    </div>
+                </div>
 
-        <label for="username">Username</label>
-        <input type="text" name="username" placeholder="Username" id="User">
+                <div class="hero-copy">
+                    <span class="hero-kicker">Modernized workspace</span>
+                    <h2>Faster daily operations with a cleaner, dynamic interface.</h2>
+                    <p>The refreshed homepage introduces a live dashboard, reusable navigation, responsive cards, and JavaScript-powered status updates without changing your core PHP business logic.</p>
+                </div>
 
-        <label for="password">Password</label>
-        <input type="password" name="password" placeholder="password" id="Password">
+                <div class="auth-highlights">
+                    <div class="auth-highlight">
+                        <strong>Live dashboard</strong>
+                        <p>See employees, overtime, shifts, and evaluation progress at a glance after login.</p>
+                    </div>
+                    <div class="auth-highlight">
+                        <strong>Quicker navigation</strong>
+                        <p>Module cards, filters, and focused shortcuts reduce extra clicks across the application.</p>
+                    </div>
+                    <div class="auth-highlight">
+                        <strong>API-ready structure</strong>
+                        <p>The new frontend layer gives us a solid base to keep modernizing other pages incrementally.</p>
+                    </div>
+                </div>
 
-        <button>Log In</button>
-    </form>
+                <div class="auth-actions">
+                    <a class="btn-secondary" href="../meeting/">Meeting Room Booking</a>
+                </div>
+            </div>
 
+            <div class="auth-card">
+                <h2>Sign in</h2>
+                <p>Use your existing system account to continue.</p>
+
+                <div class="form-note">The app keeps your current authentication flow and now provides clearer validation feedback.</div>
+                <div class="error-banner <?php echo $loginError ? '' : 'is-hidden'; ?>" data-login-error><?php echo htmlspecialchars($loginError, ENT_QUOTES, 'UTF-8'); ?></div>
+
+                <form action="login.php" method="post" data-login-form>
+                    <div class="field">
+                        <label for="User">Username</label>
+                        <input type="text" name="username" id="User" placeholder="Enter username" autocomplete="username">
+                    </div>
+
+                    <div class="field">
+                        <label for="Password">Password</label>
+                        <input type="password" name="password" id="Password" placeholder="Enter password" autocomplete="current-password">
+                    </div>
+
+                    <div class="auth-actions">
+                        <button class="btn-primary" type="submit">Log In</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <script src="assets/js/app.js"></script>
     <script>
-        function validateForm() {
-            var username = document.getElementById("User").value;
-            var password = document.getElementById("Password").value;
-            if (username == "" || password == "") {
-                alert("Username and Password must be filled out");
-                return false;
+        document.addEventListener('DOMContentLoaded', function () {
+            var userField = document.getElementById('User');
+            if (userField) {
+                userField.focus();
             }
-            return true;
-        }
+        });
     </script>
 </body>
 </html>

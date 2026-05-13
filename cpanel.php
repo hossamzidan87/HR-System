@@ -2,77 +2,41 @@
 include 'check_cookies.php';
 include 'db_connection.php';
 include 'page_access.php';
-// Check if the logged-in user is 'admin'
-
+include 'includes/app_helpers.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cpanel</title>
-    <style>
-        .container {
-            width: 35%;
-            margin: 0 auto;
-            text-align: center;
-            padding: 50px;
-        }
-        .link {
-            display: block;
-            margin: 20px 0;
-            padding: 10px;
-            font-size: 20px;
-            text-decoration: none;
-            color: #fff;
-            background-color: #007BFF;
-            border-radius: 5px;
-        }
-        .link:hover {
-            background-color: #0056b3;
-        }
-        .image-container { /* New container */
-    display: flex;
-    justify-content: flex-end; /* Align items to the right */
-    align-items: center; /* Vertically center items */
-}
-
-.image-link {
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    padding: 5px;
-    width: 25px; /* Adjust as needed */
-    margin: 0 5px; /* Space between images */
-    display: inline-block; /* to prevent collapsing margins */
-}
-
-.image-link:hover {
-    box-shadow: 0 0 2px 1px rgba(0, 140, 186, 0.5);
-}
-
-.image-link img {
-    width: 100%; /* Make image fill container */
-    height: auto; /* Maintain aspect ratio */
-    display: block; /* Prevents small gap below image */
-}
-    </style>
+    <title>Control Panel</title>
+    <link rel="stylesheet" href="assets/css/app.css">
+    <link rel="icon" type="image/png" href="images/logo.png">
 </head>
 <body>
-<div class="image-container">
-
-<div class="image-link">
-    <a href="welcome.php"><img src="/images/icons/home.png" alt="home"></a>
+<?php
+app_render_page_header('CP', 'Control Panel', 'Administrative tools for permissions, rules, evaluations, shifts, and salary advance settings.', [
+    ['label' => 'Home', 'href' => 'welcome.php'],
+    ['label' => 'Logout', 'href' => 'logout.php'],
+]);
+app_render_page_hero('Admin area', 'All control modules now launch from the same app shell.', 'The cpanel home has been rebuilt as a clean action board so you can move into each admin area with the same responsive interface used across the rest of the revamp.', [
+    ['title' => 'Admin Tools', 'text' => 'General, overtime, shifts, evaluation, and salary advance controls.'],
+    ['title' => 'Shared UI', 'text' => 'This page now matches the redesigned dashboard and second-level screens.'],
+]);
+app_open_content_panel('Administrative Modules', 'Choose the control area you want to manage.');
+?>
+<div class="quick-grid">
+    <a class="quick-card" href="general_cpanel.php"><strong>General Cpanel</strong><p>Manage department groups, user permissions, and page access.</p></a>
+    <a class="quick-card" href="overtime_cpanel.php"><strong>Overtime Cpanel</strong><p>Maintain overtime rules, bus lines, calendars, and employee imports.</p></a>
+    <a class="quick-card" href="shifts_cpanel.php"><strong>Shifts Cpanel</strong><p>Adjust the night shift access window.</p></a>
+    <a class="quick-card" href="evaluation_cpanel.php"><strong>Evaluation Cpanel</strong><p>Manage evaluation periods, quarter rules, and evaluation imports.</p></a>
+    <a class="quick-card" href="sadv_cpanel.php"><strong>Salary Advance Cpanel</strong><p>Set the salary advance opening and closing dates.</p></a>
 </div>
-<div class="image-link">
-    <a href="logout.php"><img src="/images/icons/logout.png" alt="logout"></a>
-</div>
-</div>
-    <div class="container">
-        <h1>Cpanel</h1>
-        <a href="general_cpanel.php" class="link">General Cpanel</a>
-        <a href="overtime_cpanel.php" class="link">OverTime Cpanel</a>
-        <a href="evaluation_cpanel.php" class="link">Evaluation Cpanel</a>
-        <a href="sadv_cpanel.php" class="link">Salary Adv Cpanel</a>
-    </div>
+<?php
+app_close_content_panel();
+app_render_page_end();
+?>
+<script src="assets/js/app.js"></script>
 </body>
 </html>
+

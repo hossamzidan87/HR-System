@@ -28,8 +28,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $job = $employee['job'];
 
                 // Insert overtime record
-                $sql = "INSERT INTO overtime (employee_code, employee_name, bus_line_name, department, job, processed_by, processed_at, overtime_date)
-                        VALUES ('$employee_code', '$employee_name', '$bus_line_name', '$department', '$job', '$processed_by', '$processed_at', '$selected_date')";
+                $sql = "INSERT INTO overtime (employee_code, employee_name, bus_line_name, department, job, processed_by, processed_at, overtime_date, types)
+                        VALUES ('$employee_code', '$employee_name', '$bus_line_name', '$department', '$job', '$processed_by', '$processed_at', '$selected_date', 'normal')";
                 
                 if ($conn->query($sql) === TRUE) {
                     echo "Overtime record added successfully for employee code " . $employee_code;
